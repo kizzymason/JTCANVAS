@@ -4,6 +4,9 @@ import { Button, Segmented } from "antd";
 import { useTranslation } from "react-i18next";
 
 import { ModelPicker } from "@/components/model-picker";
+import { PriceEstimate } from "@/components/price-estimate";
+import { pricingSpecFor } from "@/lib/pricing-spec";
+import { videoPricingSpecFor } from "@/lib/video-pricing-spec";
 import { defaultConfig, resolveModelForCapability, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -111,6 +114,15 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, onConfigC
                 )}
             </div>
 
+            <div className="mb-1.5 flex justify-end" onMouseDown={(event) => event.stopPropagation()}>
+                <PriceEstimate
+                    model={config.model}
+                    count={mode === "image" ? Number(config.count) || 1 : 1}
+                    seconds={mode === "video" ? Math.max(1, Number(config.videoSeconds) || 1) : undefined}
+                    spec={mode === "image" ? pricingSpecFor(config.quality, config.size) : mode === "video" ? videoPricingSpecFor(config.vquality, inputSummary.videoCount > 0) : undefined}
+                    referenceCount={mode === "image" ? inputSummary.imageCount : undefined}
+                />
+            </div>
             <Button
                 type="primary"
                 className="mt-auto !h-9 !w-full !cursor-pointer !rounded-lg"

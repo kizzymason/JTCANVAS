@@ -45,6 +45,7 @@ services:
             GENERATION_WORKER_CONCURRENCY: ${GENERATION_WORKER_CONCURRENCY:-4}
             GENERATION_MAX_ACTIVE_PER_USER: ${GENERATION_MAX_ACTIVE_PER_USER:-3}
             LOG_LEVEL: ${LOG_LEVEL:-info}
+            WHATSTOKEN_API_KEY: ${WHATSTOKEN_API_KEY:-}
         volumes:
             - storage:/data/storage
         # 迁移在 API 启动前执行一次；worker 不重复执行，避免并发加锁。

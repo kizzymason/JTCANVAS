@@ -16,6 +16,7 @@ import { StorageService } from "../storage/storage.service";
 import { WalletService } from "../wallet/wallet.service";
 import { GENERATION_QUEUE, type GenerationJobData } from "./generation.queue";
 import { pricingSpec } from "./image-size";
+import { isVideoMime, videoPricingSpec } from "./video-pricing-spec";
 import type { CreateGenerationDto } from "./dto/generation.dto";
 
 const ACTIVE_STATUSES = ["pending", "running"] as const;
@@ -75,7 +76,12 @@ export class GenerationService {
             assertVideoGenerationFeatures(publicModel.features, { seconds: input.seconds, resolution: input.resolution });
         }
 
-        const spec = input.capability === "image" ? pricingSpec(input.quality, input.size) : undefined;
+        const spec =
+            input.capability === "image"
+                ? pricingSpec(input.quality, input.size)
+                : input.capability === "video"
+                  ? videoPricingSpec(input.resolution, references.some((item) => isVideoMime(item.mimeType)))
+                  : undefined;
         const estimate = await this.pricing.estimate({
             model: input.model,
             count: input.count ?? 1,
@@ -226,7 +232,7 @@ export class GenerationService {
         const resolved = await Promise.all(keys.map((key) => this.storage.findByStorageKey(userId, key)));
         const missing = keys.filter((_key, index) => !resolved[index]);
         if (missing.length) throw badRequest("REFERENCE_NOT_FOUND", `参考图不存在或不属于当前账号：${missing.join(", ")}`);
-        return (input.references ?? []).map((key) => ({ storageKey: key }));
+        return (input.references ?? []).map((key, index) => ({ storageKey: key, mimeType: resolved[index]?.mimeType ?? "" }));
     }
 
     toResponse(task: GenerationTask) {

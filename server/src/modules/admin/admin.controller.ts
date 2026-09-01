@@ -250,6 +250,13 @@ export class AdminController {
         return this.admin.ensurePiapiChannel();
     }
 
+    @Post("whatstoken/ensure-channel")
+    @Audit({ action: "whatstoken.ensure_channel", targetType: "channel" })
+    @ApiOperation({ summary: "预置 WhatsToken 渠道与 Seedream/Seedance 模型（幂等，不覆盖已有价格）" })
+    ensureWhatsTokenChannel() {
+        return this.admin.ensureWhatsTokenChannel();
+    }
+
     @Post("piapi/import")
     @Audit({ action: "piapi.import", targetType: "piapi_account" })
     @ApiOperation({ summary: "批量导入 PiAPI 账号" })

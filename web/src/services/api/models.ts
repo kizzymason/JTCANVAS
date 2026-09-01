@@ -73,10 +73,14 @@ export function canAfford(balance: string | undefined, estimate: string) {
     return new Decimal(balance || 0).gte(new Decimal(estimate));
 }
 
-/** PiAPI lite bills 3K where the shared quality map says 4K; pro clamps 3K/4K down to 2K. */
+/** PiAPI lite bills 3K where the shared quality map says 4K; pro clamps 3K/4K down to 2K. Video 含视 falls back to 无视 of the same resolution. */
 function lookupSpecPrice(specPrices: Record<string, string>, spec: string | undefined, fallback: string) {
     if (!spec) return fallback;
     if (specPrices[spec]) return specPrices[spec];
+    if (spec.endsWith("-video")) {
+        const without = spec.slice(0, -"-video".length);
+        if (specPrices[without]) return specPrices[without];
+    }
     if (spec === "4K") return specPrices["3K"] ?? specPrices["2K"] ?? fallback;
     if (spec === "3K") return specPrices["2K"] ?? fallback;
     return fallback;

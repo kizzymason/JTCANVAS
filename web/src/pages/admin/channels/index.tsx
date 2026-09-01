@@ -338,7 +338,7 @@ export default function AdminChannelsPage() {
                     {capability === "video" ? (
                         <>
                             <Form.Item name={["features", "videoResolutions"]} label={t("admin.channels.videoResolutions")} extra={t("admin.channels.videoResolutionsHint")}>
-                                <Select mode="tags" tokenSeparators={[","]} options={[{ value: "480", label: "480p" }, { value: "720", label: "720p" }, { value: "1080", label: "1080p" }]} />
+                                <Select mode="tags" tokenSeparators={[","]} options={[{ value: "480", label: "480p" }, { value: "720", label: "720p" }, { value: "1080", label: "1080p" }, { value: "2160", label: "4K" }]} />
                             </Form.Item>
                             <Form.Item name={["features", "maxSeconds"]} label={t("admin.channels.maxSeconds")} extra={t("admin.channels.maxSecondsHint")}>
                                 <InputNumber min={1} max={600} />

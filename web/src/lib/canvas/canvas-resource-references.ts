@@ -97,6 +97,17 @@ export function getGroupResourceNodes(groupId: string, nodes: CanvasNodeData[]) 
     return nodes.filter((node) => node.metadata?.groupId === groupId && isResourceNode(node));
 }
 
+/** True when a connected reference is a video (including videos nested in a group). Used for 含视 pricing. */
+export function connectedHasVideoReference(connected: CanvasNodeData[], nodes: CanvasNodeData[]) {
+    return connected.some((node) => {
+        if (node.type === CanvasNodeType.Video && node.metadata?.content) return true;
+        if (node.type === CanvasNodeType.Group) {
+            return getGroupResourceNodes(node.id, nodes).some((child) => child.type === CanvasNodeType.Video && child.metadata?.content);
+        }
+        return false;
+    });
+}
+
 function labelResourceNodes(nodes: CanvasNodeData[], active: boolean) {
     const counts: Record<CanvasResourceKind, number> = { image: 0, video: 0, audio: 0, text: 0 };
     return nodes.flatMap((node): CanvasResourceReference[] => {

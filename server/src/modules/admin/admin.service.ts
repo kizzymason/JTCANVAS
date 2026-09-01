@@ -9,6 +9,7 @@ import { AuthService } from "../auth/auth.service";
 import { SessionService } from "../auth/session.service";
 import { CryptoService } from "../crypto/crypto.service";
 import { seedPiapiChannel } from "../generation/piapi-channel.seed";
+import { seedWhatsTokenChannel } from "../generation/whatstoken-channel.seed";
 import { parseModelFeatures } from "../pricing/model-features";
 import { PricingService } from "../pricing/pricing.service";
 import { SettingsService, type StorageSettings } from "../settings/settings.service";
@@ -32,9 +33,13 @@ export class AdminService implements OnModuleInit {
 
     /** API process only — WorkerModule does not import AdminModule. */
     async onModuleInit() {
-        const result = await this.ensurePiapiChannel();
+        const piapi = await this.ensurePiapiChannel();
         this.logger.log(
-            `PiAPI channel ${result.created ? "created" : "ensured"} ${result.id}: modelsCreated=${result.modelsCreated} pricesInserted=${result.pricesInserted}`,
+            `PiAPI channel ${piapi.created ? "created" : "ensured"} ${piapi.id}: modelsCreated=${piapi.modelsCreated} pricesInserted=${piapi.pricesInserted}`,
+        );
+        const whatsToken = await this.ensureWhatsTokenChannel();
+        this.logger.log(
+            `WhatsToken channel ${whatsToken.created ? "created" : "ensured"} ${whatsToken.id}: modelsCreated=${whatsToken.modelsCreated} pricesInserted=${whatsToken.pricesInserted} keyUpdated=${whatsToken.keyUpdated}`,
         );
     }
 
@@ -45,6 +50,19 @@ export class AdminService implements OnModuleInit {
         return {
             ...result,
             audit: { targetId: result.id, after: { name: result.name, created: result.created, modelsCreated: result.modelsCreated, pricesInserted: result.pricesInserted } },
+        };
+    }
+
+    /** Creates the WhatsToken OpenAI channel and Seedream/Seedance models if missing; never overwrites existing prices or keys. */
+    async ensureWhatsTokenChannel() {
+        const result = await seedWhatsTokenChannel(this.db, {
+            apiKey: process.env.WHATSTOKEN_API_KEY?.trim() || undefined,
+            crypto: this.crypto,
+        });
+        await this.pricing.invalidate();
+        return {
+            ...result,
+            audit: { targetId: result.id, after: { name: result.name, created: result.created, modelsCreated: result.modelsCreated, pricesInserted: result.pricesInserted, keyUpdated: result.keyUpdated } },
         };
     }
 
