@@ -1,7 +1,7 @@
 import { CanActivate, ExecutionContext, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Reflector } from "@nestjs/core";
-import { IS_PUBLIC_KEY, ROLES_KEY } from "../decorators";
+import { IS_PUBLIC_KEY, ROLES_KEY, SKIP_SESSION_KEY } from "../decorators";
 import { forbidden, unauthorized } from "../errors";
 import type { RequestWithUser, UserRole } from "../types";
 import { SessionService } from "../../modules/auth/session.service";
@@ -25,13 +25,20 @@ export class AuthGuard implements CanActivate {
     async canActivate(context: ExecutionContext) {
         const handlers = [context.getHandler(), context.getClass()];
         const request = context.switchToHttp().getRequest<RequestWithUser>();
+        const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, handlers);
+        const skipSession = this.reflector.getAllAndOverride<boolean>(SKIP_SESSION_KEY, handlers);
+
+        // Visitor beacons skip Redis session lookup so pageviews never wait on auth.
+        if (skipSession) {
+            if (isPublic) return true;
+            throw unauthorized();
+        }
 
         const token = request.cookies?.[this.cookieName] || "";
         const user = token ? await this.sessions.resolve(token) : null;
-        // Resolve the user even on public routes so handlers like the homepage can adapt to a signed-in visitor.
+        // Resolve the user even on public routes so handlers like bootstrap can adapt to a signed-in visitor.
         if (user) request.user = user;
-
-        if (this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, handlers)) return true;
+        if (isPublic) return true;
         if (!user) throw unauthorized();
 
         const roles = this.reflector.getAllAndOverride<UserRole[]>(ROLES_KEY, handlers);

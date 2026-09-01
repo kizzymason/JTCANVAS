@@ -1,45 +1,39 @@
-function canvasSample() {
-    try {
-        const el = document.createElement("canvas");
-        el.width = 220;
-        el.height = 48;
-        const ctx = el.getContext("2d");
-        if (!ctx) return "";
-        ctx.textBaseline = "top";
-        ctx.font = "16px Arial";
-        ctx.fillStyle = "#c2410c";
-        ctx.fillRect(8, 8, 80, 28);
-        ctx.fillStyle = "#1c1917";
-        ctx.fillText("JTCANVAS", 12, 14);
-        return el.toDataURL().slice(-48);
-    } catch {
-        return "";
-    }
-}
+const DEVICE_ID_KEY = "ic_device_id";
 
 function toHex(buffer: ArrayBuffer) {
     return [...new Uint8Array(buffer)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-/** First-party device fingerprint. SHA-256 of local signals only — never mixed with IP. */
+function persistDeviceId() {
+    try {
+        const existing = window.localStorage.getItem(DEVICE_ID_KEY);
+        if (existing && /^[0-9a-f-]{16,64}$/i.test(existing)) return existing;
+        const id = crypto.randomUUID();
+        window.localStorage.setItem(DEVICE_ID_KEY, id);
+        return id;
+    } catch {
+        return crypto.randomUUID();
+    }
+}
+
+/**
+ * First-party device id for the 365-day registration lock. A persisted UUID is unique per browser
+ * and does not use canvas fingerprints (those collide under Safari privacy and stall mobile GPUs).
+ * Call this only on register submit — never on page load or visitor beacons.
+ */
 export async function collectDeviceFingerprint() {
-    const parts = [
-        String(window.screen.width),
-        String(window.screen.height),
-        String(window.screen.colorDepth),
-        Intl.DateTimeFormat().resolvedOptions().timeZone || "",
-        navigator.language || "",
-        navigator.platform || "",
-        String(navigator.hardwareConcurrency || 0),
-        canvasSample(),
-    ].join("|");
-    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(parts));
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`jtcanvas-device:${persistDeviceId()}`));
     return toHex(digest);
 }
 
 let cachedFingerprint: Promise<string> | null = null;
 
 export function cachedDeviceFingerprint() {
-    if (!cachedFingerprint) cachedFingerprint = collectDeviceFingerprint().catch(() => "0".repeat(64));
+    if (!cachedFingerprint) {
+        cachedFingerprint = collectDeviceFingerprint().catch(async () => {
+            const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`jtcanvas-device:${crypto.randomUUID()}`));
+            return toHex(digest);
+        });
+    }
     return cachedFingerprint;
 }

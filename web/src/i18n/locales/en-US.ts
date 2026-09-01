@@ -368,10 +368,6 @@ export default {
         registerHint: "Top up your balance before generating",
         registrationClosed: "Registration is currently closed, please contact an administrator",
         close: "Close",
-        sliderLabel: "Slide to verify",
-        sliderHint: "Hold and drag the slider to the end",
-        sliderPassed: "Verified",
-        sliderRequired: "Complete the slider before signing up",
     },
     pricing: {
         estimate: "Est.",

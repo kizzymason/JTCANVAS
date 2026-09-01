@@ -2,12 +2,16 @@ import { createParamDecorator, ExecutionContext, SetMetadata } from "@nestjs/com
 import type { AuthUser, RequestWithUser, UserRole } from "./types";
 
 export const IS_PUBLIC_KEY = "ic:isPublic";
+export const SKIP_SESSION_KEY = "ic:skipSession";
 export const ROLES_KEY = "ic:roles";
 export const AUDIT_KEY = "ic:audit";
 export const IDEMPOTENT_KEY = "ic:idempotent";
 
 /** Opt a route out of AuthGuard. Everything else requires a session by default. */
 export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
+
+/** Public high-frequency routes that must not wait on a Redis session lookup. */
+export const SkipSession = () => SetMetadata(SKIP_SESSION_KEY, true);
 
 export const Roles = (...roles: UserRole[]) => SetMetadata(ROLES_KEY, roles);
 

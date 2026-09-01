@@ -95,20 +95,22 @@ export function fetchBootstrap() {
     return apiGet<{ site: SiteInfo; user: CurrentUser | null }>("/auth/bootstrap");
 }
 
-export function register(body: { username: string; password: string; sliderToken: string; fingerprint: string; website?: string }) {
+export function register(body: { username: string; password: string; fingerprint: string; website?: string }) {
     return apiPost<{ user: CurrentUser }>("/auth/register", body);
 }
 
-export function createSliderChallenge() {
-    return apiPost<{ challengeId: string }>("/auth/slider-challenge");
-}
-
-export function verifySlider(body: { challengeId: string; durationMs: number; points: number[] }) {
-    return apiPost<{ token: string }>("/auth/slider-verify", body);
-}
-
-export function reportVisitorBeacon(body: { path: string; screen?: string; timezone?: string; fingerprint?: string; webdriver?: boolean }) {
-    return apiPost<void>("/visitors/beacon", body);
+/** Fire-and-forget pageview. Uses fetch+keepalive so it does not share the axios pool or trip the 401 handler. */
+export function reportVisitorBeacon(body: { path: string; screen?: string; timezone?: string; webdriver?: boolean }) {
+    return fetch("/api/visitors/beacon", {
+        method: "POST",
+        credentials: "include",
+        keepalive: true,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+    }).then(
+        () => undefined,
+        () => undefined,
+    );
 }
 
 export function login(body: { username: string; password: string }) {

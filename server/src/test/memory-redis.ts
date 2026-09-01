@@ -1,5 +1,5 @@
 /**
- * In-memory stand-in for the ioredis commands used by visitor UV sets, slider tokens,
+ * In-memory stand-in for the ioredis commands used by visitor UV sets,
  * registration hourly caps and redeem cooldowns. Specs only; not wired into the app.
  */
 export class MemoryRedis {

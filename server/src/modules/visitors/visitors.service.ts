@@ -47,8 +47,7 @@ export class VisitorsService {
         const burst = input.forceKind ? false : await this.markBurst(input.ip, input.path);
         const kind = input.forceKind ?? classifyVisitor({ ua: input.userAgent, webdriver: input.webdriver, burst });
         const date = utcDateString();
-        await this.bumpDaily(date, input.path, kind, input.visitorId);
-        await this.bumpDaily(date, SITEWIDE_PATH, kind, input.visitorId);
+        await Promise.all([this.bumpDaily(date, input.path, kind, input.visitorId), this.bumpDaily(date, SITEWIDE_PATH, kind, input.visitorId)]);
         await this.db.insert(visitorEvents).values({
             visitorId: input.visitorId.slice(0, 64),
             userId: input.userId || null,

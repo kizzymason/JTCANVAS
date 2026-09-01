@@ -10,7 +10,23 @@ import "@/i18n";
 import { initAnalytics } from "@/lib/analytics";
 import { router } from "@/router";
 
-initAnalytics();
+function scheduleAnalytics() {
+    const start = () => initAnalytics();
+    const idle = () => {
+        if (typeof requestIdleCallback === "function") {
+            requestIdleCallback(start, { timeout: 4000 });
+            return;
+        }
+        window.setTimeout(start, 0);
+    };
+    if (document.readyState === "complete") {
+        idle();
+        return;
+    }
+    window.addEventListener("load", idle, { once: true });
+}
+
+scheduleAnalytics();
 
 document.body.style.fontFamily = '"SF Pro Display","SF Pro Text","PingFang SC","Microsoft YaHei","Helvetica Neue",sans-serif';
 

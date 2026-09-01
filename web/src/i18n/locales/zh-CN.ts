@@ -368,10 +368,6 @@ export default {
         registerHint: "注册后需要先充值余额才能生成",
         registrationClosed: "当前站点已关闭注册，请联系管理员",
         close: "关闭",
-        sliderLabel: "滑动验证",
-        sliderHint: "请按住滑块拖到最右边",
-        sliderPassed: "验证通过",
-        sliderRequired: "请先完成滑动验证",
     },
     pricing: {
         estimate: "预计",

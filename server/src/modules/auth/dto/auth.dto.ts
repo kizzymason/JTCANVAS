@@ -1,6 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { Type } from "class-transformer";
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsInt, IsNumber, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength } from "class-validator";
+import { IsObject, IsOptional, IsString, Matches, MaxLength, MinLength } from "class-validator";
 
 /** Username rules are deliberately strict: they are the login identity and appear in admin lists. */
 const USERNAME_PATTERN = /^[a-zA-Z0-9_-]+$/;
@@ -19,12 +18,6 @@ export class RegisterDto {
     @MaxLength(128, { message: "密码最多 128 个字符" })
     password!: string;
 
-    @ApiProperty({ description: "滑块验证一次性 token" })
-    @IsString()
-    @MinLength(16)
-    @MaxLength(128)
-    sliderToken!: string;
-
     @ApiProperty({ description: "设备指纹 SHA-256 hex" })
     @IsString()
     @Matches(/^[a-fA-F0-9]{64}$/, { message: "设备指纹无效" })
@@ -36,29 +29,6 @@ export class RegisterDto {
     @IsString()
     @MaxLength(256)
     website?: string;
-}
-
-export class SliderVerifyDto {
-    @ApiProperty()
-    @IsString()
-    @MaxLength(64)
-    challengeId!: string;
-
-    @ApiProperty()
-    @Type(() => Number)
-    @IsInt()
-    @Min(0)
-    @Max(60_000)
-    durationMs!: number;
-
-    @ApiProperty({ type: [Number] })
-    @IsArray()
-    @ArrayMinSize(8)
-    @ArrayMaxSize(200)
-    @IsNumber({}, { each: true })
-    @Min(0, { each: true })
-    @Max(1, { each: true })
-    points!: number[];
 }
 
 export class LoginDto {

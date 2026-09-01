@@ -15,7 +15,7 @@ export function registrationLockError(input: { isFirstUser: boolean; lockRegiste
         return { code: "DEVICE_REGISTERED", message: "该设备已注册过账号，请直接登录" };
     }
     if (input.ipSuccessCount >= IP_REGISTER_SUCCESS_LIMIT) {
-        return { code: "TOO_MANY_REQUESTS", message: "请稍后再试" };
+        return { code: "TOO_MANY_REQUESTS", message: "当前网络注册次数过多，请稍后再试" };
     }
     return null;
 }

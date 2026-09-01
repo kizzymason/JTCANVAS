@@ -20,7 +20,8 @@ export class VisitorBeaconDto {
     @MaxLength(64)
     timezone?: string;
 
-    @ApiPropertyOptional({ description: "SHA-256 hex of the first-party device fingerprint" })
+    /** Ignored. Kept so older clients that still send a fingerprint do not fail whitelist validation. */
+    @ApiPropertyOptional()
     @IsOptional()
     @IsString()
     @MaxLength(64)
