@@ -52,8 +52,20 @@ export function fetchBootstrap() {
     return apiGet<{ site: SiteInfo; user: CurrentUser | null }>("/auth/bootstrap");
 }
 
-export function register(body: { username: string; password: string }) {
+export function register(body: { username: string; password: string; sliderToken: string; fingerprint: string; website?: string }) {
     return apiPost<{ user: CurrentUser }>("/auth/register", body);
+}
+
+export function createSliderChallenge() {
+    return apiPost<{ challengeId: string }>("/auth/slider-challenge");
+}
+
+export function verifySlider(body: { challengeId: string; durationMs: number; points: number[] }) {
+    return apiPost<{ token: string }>("/auth/slider-verify", body);
+}
+
+export function reportVisitorBeacon(body: { path: string; screen?: string; timezone?: string; fingerprint?: string; webdriver?: boolean }) {
+    return apiPost<void>("/visitors/beacon", body);
 }
 
 export function login(body: { username: string; password: string }) {

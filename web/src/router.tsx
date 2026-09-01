@@ -19,6 +19,7 @@ const ImagePage = lazy(() => import("@/pages/image"));
 const VideoPage = lazy(() => import("@/pages/video"));
 const AdminLayout = lazy(() => import("@/layouts/admin-layout"));
 const AdminOverviewPage = lazy(() => import("@/pages/admin/overview"));
+const AdminVisitorsPage = lazy(() => import("@/pages/admin/visitors"));
 const AdminUsersPage = lazy(() => import("@/pages/admin/users"));
 const AdminChannelsPage = lazy(() => import("@/pages/admin/channels"));
 const AdminPricingPage = lazy(() => import("@/pages/admin/pricing"));
@@ -104,6 +105,7 @@ export const router = createBrowserRouter([
                 ),
                 children: [
                     { index: true, element: <Lazy><AdminOverviewPage /></Lazy> },
+                    { path: "visitors", element: <Lazy><AdminVisitorsPage /></Lazy> },
                     { path: "users", element: <Lazy><AdminUsersPage /></Lazy> },
                     { path: "channels", element: <Lazy><AdminChannelsPage /></Lazy> },
                     { path: "pricing", element: <Lazy><AdminPricingPage /></Lazy> },

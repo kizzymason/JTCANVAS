@@ -33,7 +33,6 @@ export class HealthController {
         return { ok, database: database.status === "fulfilled", redis: redis.status === "fulfilled" };
     }
 
-    @Public()
     @Get("metrics")
     async metrics() {
         return register.metrics();

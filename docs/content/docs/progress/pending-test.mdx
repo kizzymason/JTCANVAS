@@ -7,6 +7,14 @@ description: Implemented changes that still need manual verification
 
 The current release needs manual verification in these areas:
 
+- Admin Visitors: `/admin/visitors` should show today and last-14-day PV/UV split by human/bot/suspected, a path ranking, and a filterable detail table with CSV export. Frontend pages (home, canvas, workbench, assets) should increment the counts, including for signed-in users; `/admin` must not. After 30 days the detail rows disappear while the daily totals stay.
+
+- Registration slider and device cap: the register tab of the homepage dialog should require dragging a slider (login has no slider). A completed slide plus a first-party device fingerprint is required. The same device cannot successfully register again within 365 days and should see a clear message; the same public IP may register up to 5 times in 24 hours. The first account on an empty database still becomes admin. Failed logins must not lock the account.
+
+- Redeem-card brute-force: more than 10 failed attempts in 15 minutes (per user or IP) should return “尝试过于频繁”. Unknown, used, and voided codes should all say the card is invalid or already used; expired cards may still say expired.
+
+- Metrics and headers: unauthenticated `GET /api/metrics` should 401; `GET /api/health` stays public. Responses include `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, and `X-Frame-Options: SAMEORIGIN`.
+
 - Brand name: the home hero should be uppercase `JTCANVAS`, the tagline highlight should say Infinite Canvas, and the public top nav should stay 「景甜画布」 / Jingtian Canvas. The canvas library page should show only the heading Canvas library with no eyebrow label; new canvases should be named Canvas 1, Canvas 2 (not Jingtian Canvas 1). The browser tab and admin header still follow Site name and must not change the home hero, tagline, or public top nav.
 
 - Canvas blank-area create menu: right-clicking empty canvas should open a compact Create node menu listing every currently addable node without scrolling; choosing an item should create that node at the click position. Double-clicking empty canvas should no longer open this menu. Right-clicking a node or connection should still open the existing action menu, and the browser context menu should not appear.

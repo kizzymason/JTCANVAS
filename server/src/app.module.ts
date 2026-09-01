@@ -25,6 +25,7 @@ import { PricingModule } from "./modules/pricing/pricing.module";
 import { ProjectsModule } from "./modules/projects/projects.module";
 import { SettingsModule } from "./modules/settings/settings.module";
 import { StorageModule } from "./modules/storage/storage.module";
+import { VisitorsModule } from "./modules/visitors/visitors.module";
 import { WalletModule } from "./modules/wallet/wallet.module";
 
 /** Shared by the API process and the worker; the worker adds the queue processor on top. */
@@ -67,6 +68,7 @@ import { WalletModule } from "./modules/wallet/wallet.module";
         GenerationModule,
         ProjectsModule,
         AssetsModule,
+        VisitorsModule,
         AdminModule,
     ],
     controllers: [HealthController],

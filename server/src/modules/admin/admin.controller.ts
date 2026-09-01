@@ -6,6 +6,8 @@ import type { AuthUser } from "../../common/types";
 import { AuditService } from "../audit/audit.service";
 import { PiapiPoolService } from "../generation/piapi-pool.service";
 import { SettingsService } from "../settings/settings.service";
+import { VisitorsService } from "../visitors/visitors.service";
+import { VisitorEventsQueryDto } from "../visitors/dto/visitors.dto";
 import { RedeemService } from "../wallet/redeem.service";
 import { PaginationDto } from "../wallet/dto/wallet.dto";
 import { AdminService } from "./admin.service";
@@ -23,6 +25,7 @@ export class AdminController {
         private readonly redeem: RedeemService,
         private readonly piapi: PiapiPoolService,
         private readonly settings: SettingsService,
+        private readonly visitors: VisitorsService,
         private readonly audit: AuditService,
         private readonly openapi: OpenApiService,
     ) {}
@@ -31,6 +34,18 @@ export class AdminController {
     @ApiOperation({ summary: "仪表盘统计" })
     overview() {
         return this.admin.overview();
+    }
+
+    @Get("visitors/summary")
+    @ApiOperation({ summary: "访客统计汇总：今日与近 14 日 PV/UV、路径排行" })
+    visitorSummary() {
+        return this.visitors.summary();
+    }
+
+    @Get("visitors/events")
+    @ApiOperation({ summary: "访客明细（仅保留 30 天）" })
+    visitorEvents(@Query() query: VisitorEventsQueryDto) {
+        return this.visitors.listEvents(query);
     }
 
     @Get("users")

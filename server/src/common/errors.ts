@@ -19,6 +19,8 @@ export const insufficientBalance = (required: string, balance: string) =>
 
 export const tooManyActiveTasks = (limit: number) => new AppError(HttpStatus.TOO_MANY_REQUESTS, "TOO_MANY_ACTIVE_TASKS", `同时进行中的任务不能超过 ${limit} 个，请稍后再试`, { limit });
 
+export const tooManyRequests = (message = "请稍后再试", code = "TOO_MANY_REQUESTS") => new AppError(HttpStatus.TOO_MANY_REQUESTS, code, message);
+
 export const noUsableChannel = (message = "当前没有可用的模型渠道，请联系管理员配置") => new AppError(HttpStatus.SERVICE_UNAVAILABLE, "NO_USABLE_CHANNEL", message);
 
 export const serviceDisabled = (message: string) => new AppError(HttpStatus.FORBIDDEN, "SERVICE_DISABLED", message);

@@ -9,9 +9,11 @@ import { DB, type Database } from "../../db/db.module";
 import { users } from "../../db/schema";
 import type { AuthUser } from "../../common/types";
 import { SettingsService, toPublicSite } from "../settings/settings.service";
+import { VisitorsService } from "../visitors/visitors.service";
 import { WalletService } from "../wallet/wallet.service";
 import { AuthService } from "./auth.service";
-import { ChangePasswordDto, LoginDto, RegisterDto, UpdatePreferencesDto } from "./dto/auth.dto";
+import { SliderChallengeService } from "./slider-challenge.service";
+import { ChangePasswordDto, LoginDto, RegisterDto, SliderVerifyDto, UpdatePreferencesDto } from "./dto/auth.dto";
 
 @ApiTags("auth")
 @Controller("auth")
@@ -20,6 +22,8 @@ export class AuthController {
         private readonly auth: AuthService,
         private readonly settings: SettingsService,
         private readonly wallet: WalletService,
+        private readonly slider: SliderChallengeService,
+        private readonly visitors: VisitorsService,
         private readonly config: ConfigService,
         @Inject(DB) private readonly db: Database,
     ) {}
@@ -28,12 +32,29 @@ export class AuthController {
     @Get("bootstrap")
     @ApiOperation({ summary: "站点公开信息与当前登录态，前端启动时调用" })
     async bootstrap(@Req() request: FastifyRequest & { user?: AuthUser }) {
+        void this.visitors.recordBotLanding({ ip: request.ip ?? "", userAgent: String(request.headers["user-agent"] ?? "") }).catch(() => undefined);
         const site = await this.settings.getSite();
         const user = request.user ? await this.currentProfile(request.user) : null;
         return {
             site: toPublicSite(site),
             user,
         };
+    }
+
+    @Public()
+    @Throttle({ default: { limit: 20, ttl: 60_000 } })
+    @Post("slider-challenge")
+    @ApiOperation({ summary: "注册滑块挑战" })
+    sliderChallenge() {
+        return this.slider.create();
+    }
+
+    @Public()
+    @Throttle({ default: { limit: 20, ttl: 60_000 } })
+    @Post("slider-verify")
+    @ApiOperation({ summary: "校验注册滑块并换取一次性 token" })
+    sliderVerify(@Body() body: SliderVerifyDto) {
+        return this.slider.verify(body);
     }
 
     @Public()
