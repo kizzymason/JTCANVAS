@@ -3,7 +3,7 @@ import { Ticket, Wallet } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { cn } from "@/lib/utils";
+import { SegmentedSwitch } from "@/components/ui/segmented-switch";
 import { redeemCard } from "@/services/api/account";
 import { ApiError, newIdempotencyKey } from "@/services/api/client";
 import { formatMoney } from "@/services/api/models";
@@ -12,8 +12,8 @@ import { useAuthStore } from "@/stores/use-auth-store";
 type RechargeMode = "recharge" | "redeem";
 
 /**
- * Centered over the wallet drawer. The slider matches the login page: a small-radius rectangle,
- * not a capsule, switching between online top-up and card redeem.
+ * Centered over the wallet drawer. The slider matches the login dialog: a small-radius rectangle,
+ * inset from the track, switching between online top-up and card redeem.
  */
 export function AccountRechargeModal({ open, onClose }: { open: boolean; onClose: () => void }) {
     const { t } = useTranslation();
@@ -35,25 +35,15 @@ export function AccountRechargeModal({ open, onClose }: { open: boolean; onClose
                 if (!next) setMode("recharge");
             }}
         >
-            <div className="relative mb-5 grid grid-cols-2 rounded-md bg-black/5 p-1 dark:bg-white/10">
-                <span
-                    aria-hidden
-                    className={cn(
-                        "absolute top-1 bottom-1 left-1 w-[calc(50%-4px)] rounded-sm bg-background shadow-sm transition-transform duration-200 dark:bg-stone-700",
-                        mode === "redeem" && "translate-x-full",
-                    )}
-                />
-                {(["recharge", "redeem"] as const).map((item) => (
-                    <button
-                        key={item}
-                        type="button"
-                        onClick={() => setMode(item)}
-                        className={cn("relative z-10 rounded-sm py-1.5 text-sm transition-colors", mode === item ? "font-medium text-stone-950 dark:text-stone-100" : "text-stone-500")}
-                    >
-                        {t(item === "recharge" ? "account.recharge" : "account.redeemTab")}
-                    </button>
-                ))}
-            </div>
+            <SegmentedSwitch
+                className="mb-5"
+                value={mode}
+                onChange={setMode}
+                items={[
+                    { value: "recharge", label: t("account.recharge") },
+                    { value: "redeem", label: t("account.redeemTab") },
+                ]}
+            />
 
             {mode === "recharge" ? (
                 <div className="py-2">

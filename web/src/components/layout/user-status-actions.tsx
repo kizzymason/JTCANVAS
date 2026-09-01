@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { formatMoney } from "@/services/api/models";
 import { useAccountDrawerStore } from "@/stores/use-account-drawer-store";
 import { useAuthStore } from "@/stores/use-auth-store";
+import { requireAuth } from "@/stores/use-auth-modal-store";
 import { useConfigStore } from "@/stores/use-config-store";
 import { useThemeStore } from "@/stores/use-theme-store";
 
@@ -48,7 +49,16 @@ export function UserStatusActions({ showConfig = true, variant = "default", onOp
                         <span>¥{formatMoney(user.wallet.balance)}</span>
                     </button>
                 </Tooltip>
-            ) : null}
+            ) : (
+                <button
+                    type="button"
+                    className={cn(naturalIconClass, "w-auto px-2.5 text-sm font-medium")}
+                    onClick={() => requireAuth("/canvas")}
+                    aria-label={t("auth.login")}
+                >
+                    {t("auth.login")}
+                </button>
+            )}
             {showConfig && user ? (
                 <button type="button" className={naturalIconClass} style={iconStyle} onClick={() => openConfigDialog(false)} aria-label={t("config.title")} title={t("config.title")}>
                     <Settings2 />

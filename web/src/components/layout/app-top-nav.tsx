@@ -12,6 +12,8 @@ import { UserStatusActions } from "@/components/layout/user-status-actions";
 import { cn } from "@/lib/utils";
 import { useEffect, useRef, useState } from "react";
 import { useAgentStore } from "@/stores/use-agent-store";
+import { useAuthStore } from "@/stores/use-auth-store";
+import { requireAuth } from "@/stores/use-auth-modal-store";
 
 export function AppTopNav() {
     const { t } = useTranslation();
@@ -25,6 +27,7 @@ export function AppTopNav() {
     const togglePanel = useAgentStore((state) => state.togglePanel);
     const panelOpen = useAgentStore((state) => state.panelOpen);
     const services = useSiteServices();
+    const user = useAuthStore((state) => state.user);
     const tools = visibleNavigationTools(services);
     const hideHeader = /^\/canvas\/[^/]+/.test(pathname);
     const slug = pathname.split("/").filter(Boolean)[0];
@@ -72,6 +75,9 @@ export function AppTopNav() {
                                         <Link
                                             key={tool.slug}
                                             to={`/${tool.slug}`}
+                                            onClick={(event) => {
+                                                if (!user && requireAuth(`/${tool.slug}`)) event.preventDefault();
+                                            }}
                                             className={cn(
                                                 "relative flex h-[4.5rem] shrink-0 items-center gap-2.5 text-base leading-6 transition after:absolute after:inset-x-0 after:bottom-0 after:h-0.5",
                                                 active

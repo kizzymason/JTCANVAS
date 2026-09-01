@@ -367,6 +367,7 @@ export default {
         loginHint: "No account yet? Switch to sign up above",
         registerHint: "Top up your balance before generating",
         registrationClosed: "Registration is currently closed, please contact an administrator",
+        close: "Close",
     },
     pricing: {
         estimate: "Est.",
