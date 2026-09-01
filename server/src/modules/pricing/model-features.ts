@@ -1,9 +1,10 @@
 import { badRequest } from "../../common/errors";
+import { defaultAspectPresets, isAspectRatioLabel, parseAspectPresets, type AspectPreset } from "./aspect-presets";
 
 export const IMAGE_RESOLUTIONS = ["1K", "2K", "4K"] as const;
 export type ImageResolution = (typeof IMAGE_RESOLUTIONS)[number];
 
-export const IMAGE_ASPECT_RATIOS = ["1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "9:16", "auto"] as const;
+export const IMAGE_ASPECT_RATIOS = defaultAspectPresets().map((item) => item.ratio);
 export const DEFAULT_MAX_COUNT = 15;
 export const DEFAULT_VIDEO_RESOLUTIONS = ["480", "720"];
 export const DEFAULT_MAX_SECONDS = 20;
@@ -13,6 +14,7 @@ export type ModelFeatures = {
     maxCount: number;
     supportsTransparent: boolean;
     aspectRatios: string[];
+    aspectPresets: AspectPreset[];
     videoResolutions: string[];
     maxSeconds: number;
 };
@@ -22,20 +24,22 @@ export type ModelFeaturesInput = Partial<{
     maxCount: number;
     supportsTransparent: boolean;
     aspectRatios: string[];
+    aspectPresets: AspectPreset[];
     videoResolutions: string[];
     maxSeconds: number;
 }>;
 
 const RESOLUTION_SET = new Set<string>(IMAGE_RESOLUTIONS);
-const ASPECT_SET = new Set<string>(IMAGE_ASPECT_RATIOS);
 
 export function parseModelFeatures(raw: unknown): ModelFeatures {
     const value = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as ModelFeaturesInput) : {};
+    const aspectPresets = parseAspectPresets(value.aspectPresets, value.aspectRatios);
     return {
         resolutions: pickList(value.resolutions, RESOLUTION_SET, [...IMAGE_RESOLUTIONS]) as ImageResolution[],
         maxCount: clampInt(value.maxCount, 1, DEFAULT_MAX_COUNT, DEFAULT_MAX_COUNT),
         supportsTransparent: Boolean(value.supportsTransparent),
-        aspectRatios: pickList(value.aspectRatios, ASPECT_SET, [...IMAGE_ASPECT_RATIOS]),
+        aspectPresets,
+        aspectRatios: aspectPresets.map((item) => item.ratio),
         videoResolutions: normalizeVideoResolutions(value.videoResolutions),
         maxSeconds: clampInt(value.maxSeconds, 1, 600, DEFAULT_MAX_SECONDS),
     };
@@ -74,12 +78,18 @@ export function assertImageGenerationFeatures(
     }
 }
 
-export function assertVideoGenerationFeatures(features: ModelFeatures, input: { seconds?: number; resolution?: string }) {
+export function assertVideoGenerationFeatures(features: ModelFeatures, input: { seconds?: number; resolution?: string; size?: string }) {
     const seconds = Math.floor(input.seconds ?? 0);
     if (seconds > features.maxSeconds) throw badRequest("SECONDS_LIMIT", `该模型最长 ${features.maxSeconds} 秒`);
     const resolution = (input.resolution ?? "").trim().replace(/p$/i, "");
     if (resolution && features.videoResolutions.length && !features.videoResolutions.includes(resolution)) {
         throw badRequest("RESOLUTION_UNSUPPORTED", "该模型不支持所选清晰度");
+    }
+    const size = (input.size ?? "").trim();
+    if (!size || size.toLowerCase() === "auto") return;
+    if (/^\d+\s*[x×*]\s*\d+$/i.test(size)) return;
+    if (isAspectRatioLabel(size) && features.aspectRatios.length && !features.aspectRatios.includes(size)) {
+        throw badRequest("ASPECT_UNSUPPORTED", "该模型不支持所选宽高比");
     }
 }
 

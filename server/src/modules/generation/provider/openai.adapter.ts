@@ -33,7 +33,7 @@ export class OpenAiAdapter extends ProviderAdapter {
         if (isSeedreamModel(request.model)) return this.seedreamImage(http, request);
 
         const quality = normalizeQuality(request.quality);
-        const size = resolveRequestSize(quality, request.size);
+        const size = resolveRequestSize(quality, request.size, request.aspectPresets);
         const background = normalizeBackground(request.background);
         const prompt = withSystemPrompt(request);
 
@@ -68,7 +68,8 @@ export class OpenAiAdapter extends ProviderAdapter {
 
     /** ByteDance Seedream on OpenAI-compatible relays wants 1K/2K/4K size labels, not pixel strings. */
     private async seedreamImage(http: AxiosInstance, request: GenerationRequest): Promise<GenerationOutput> {
-        const size = pricingSpec(request.quality, request.size) || "2K";
+        const size = pricingSpec(request.quality, request.size, request.aspectPresets) || "2K";
+        const ratio = (request.size ?? "").trim();
         const body: Record<string, unknown> = {
             model: request.model,
             prompt: withSystemPrompt(request),
@@ -76,6 +77,7 @@ export class OpenAiAdapter extends ProviderAdapter {
             n: request.count,
             watermark: Boolean(request.watermark),
         };
+        if (/^\d+(\.\d+)?:\d+(\.\d+)?$/.test(ratio)) body.aspect_ratio = ratio;
         if (request.references.length) {
             body.image = request.references.map((reference) => dataUrlOf(reference.body, reference.mimeType));
         }
@@ -90,7 +92,8 @@ export class OpenAiAdapter extends ProviderAdapter {
         form.append("model", request.model);
         form.append("prompt", withSystemPrompt(request));
         if (request.seconds) form.append("seconds", String(request.seconds));
-        if (request.size) form.append("size", request.size);
+        const videoSize = resolveRequestSize("1K", request.size, request.aspectPresets);
+        if (videoSize) form.append("size", videoSize);
         if (request.resolution) form.append("resolution", request.resolution);
         if (request.generateAudio !== undefined) form.append("generate_audio", String(request.generateAudio));
         if (request.watermark !== undefined) form.append("watermark", String(request.watermark));
@@ -147,7 +150,8 @@ export class OpenAiAdapter extends ProviderAdapter {
             form.append("prompt", prompt);
             if (request.seconds) form.append("seconds", String(request.seconds));
             form.append("resolution", resolution);
-            if (request.size) form.append("size", request.size);
+            const videoSize = resolveRequestSize("1K", request.size, request.aspectPresets);
+            if (videoSize) form.append("size", videoSize);
             if (request.generateAudio !== undefined) form.append("generate_audio", String(request.generateAudio));
             form.append("watermark", String(Boolean(request.watermark)));
             for (const reference of request.references.slice(0, 7)) form.append("input_reference[]", blobOf(reference.body, reference.mimeType), reference.fileName);

@@ -5,13 +5,13 @@
  * estimate has to know which tier the current settings land in.
  */
 export function pricingSpecFor(quality: string | undefined, size: string | undefined) {
-    const dimensions = (size ?? "").trim().match(/^(\d+)\s*[x×*]\s*(\d+)$/i);
-    if (dimensions) return tierFor(Math.max(Number(dimensions[1]), Number(dimensions[2])));
-
     const value = (quality ?? "").trim().toLowerCase();
     if (value === "high" || value === "4k") return "4K";
     if (value === "medium" || value === "hd" || value === "2k") return "2K";
     if (value === "low" || value === "standard" || value === "1k") return "1K";
+
+    const dimensions = (size ?? "").trim().match(/^(\d+)\s*[x×*]\s*(\d+)$/i);
+    if (dimensions) return tierFor(Math.max(Number(dimensions[1]), Number(dimensions[2])));
     return undefined;
 }
 

@@ -113,6 +113,25 @@ export class AdjustBalanceDto {
     note!: string;
 }
 
+export class AspectPresetDto {
+    @ApiProperty({ example: "16:9" })
+    @IsString()
+    @MaxLength(32)
+    @Matches(/^(auto|\d+(\.\d+)?:\d+(\.\d+)?)$/i)
+    ratio!: string;
+
+    @ApiPropertyOptional()
+    @IsOptional()
+    @IsString()
+    @MaxLength(32)
+    label?: string;
+
+    @ApiPropertyOptional({ description: "1K/2K/4K 像素，例如 1280x720。缺省档位按 1K 的 2×/4× 补齐" })
+    @IsOptional()
+    @IsObject()
+    sizes?: Record<string, string>;
+}
+
 export class ModelFeaturesDto {
     @ApiPropertyOptional({ type: [String], description: "生图分辨率档位，如 1K、2K、4K" })
     @IsOptional()
@@ -133,12 +152,19 @@ export class ModelFeaturesDto {
     @IsBoolean()
     supportsTransparent?: boolean;
 
-    @ApiPropertyOptional({ type: [String], description: "允许的宽高比，含 auto" })
+    @ApiPropertyOptional({ type: [String], description: "允许的宽高比，含 auto；新配置请用 aspectPresets" })
     @IsOptional()
     @IsArray()
     @IsString({ each: true })
     @MaxLength(16, { each: true })
     aspectRatios?: string[];
+
+    @ApiPropertyOptional({ description: "按模型配置的宽高比及 1K/2K/4K 像素，互不影响" })
+    @IsOptional()
+    @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => AspectPresetDto)
+    aspectPresets?: AspectPresetDto[];
 
     @ApiPropertyOptional({ type: [String], description: "视频清晰度，如 480、720、1080" })
     @IsOptional()

@@ -43,6 +43,7 @@ export type AdminChannelModel = {
         maxCount: number;
         supportsTransparent: boolean;
         aspectRatios: string[];
+        aspectPresets?: Array<{ ratio: string; label: string; sizes: Partial<Record<"1K" | "2K" | "4K", string>> }>;
         videoResolutions: string[];
         maxSeconds: number;
     };

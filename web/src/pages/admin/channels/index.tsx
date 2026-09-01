@@ -9,7 +9,9 @@ import { ApiError } from "@/services/api/client";
 import { adminApi, type AdminChannel, type AdminChannelModel, type AdminModelPrice } from "@/services/api/admin";
 import { formatMoney } from "@/services/api/models";
 import { PIAPI_BASE_URL, PIAPI_SEEDREAM_LABELS, PIAPI_SEEDREAM_TASK_TYPES } from "@/lib/piapi/piapi-models";
-import { DEFAULT_MODEL_FEATURES, IMAGE_ASPECT_RATIOS, IMAGE_RESOLUTIONS } from "@/lib/model-features";
+import { parseAspectPresets } from "@/lib/aspect-presets";
+import { DEFAULT_MODEL_FEATURES, IMAGE_RESOLUTIONS } from "@/lib/model-features";
+import { AspectPresetEditor } from "./components/aspect-preset-editor";
 
 const capabilityOptions = ["image", "video", "text", "audio"] as const;
 const billingOptions = ["per_image", "per_second", "per_call"] as const;
@@ -156,12 +158,14 @@ export default function AdminChannelsPage() {
                                 <Tag>{model.features.resolutions.join(" / ")}</Tag>
                                 <Tag>{model.features.maxCount <= 1 ? t("admin.channels.batchOne") : t("admin.channels.batchN", { count: model.features.maxCount })}</Tag>
                                 {model.features.supportsTransparent ? <Tag>{t("admin.channels.transparentOn")}</Tag> : null}
+                                <Tag>{(model.features.aspectPresets ?? []).map((item) => item.ratio).filter((item) => item !== "auto").join(" / ") || model.features.aspectRatios.filter((item) => item !== "auto").join(" / ")}</Tag>
                             </div>
                         ) : null}
                         {model.capability === "video" && model.features ? (
                             <div className="mt-2 flex flex-wrap gap-1">
                                 <Tag>{model.features.videoResolutions.map((item) => `${item}p`).join(" / ")}</Tag>
                                 <Tag>{t("admin.channels.maxSecondsTag", { count: model.features.maxSeconds })}</Tag>
+                                <Tag>{(model.features.aspectPresets ?? []).map((item) => item.ratio).filter((item) => item !== "auto").join(" / ") || model.features.aspectRatios.filter((item) => item !== "auto").join(" / ")}</Tag>
                             </div>
                         ) : null}
                     </Card>
@@ -276,23 +280,29 @@ export default function AdminChannelsPage() {
         return (
             <Modal
                 open={Boolean(target)}
-                width={720}
+                width={960}
                 title={t(target?.model ? "admin.channels.editModel" : "admin.channels.addModel")}
                 onCancel={onClose}
                 onOk={() => void submit()}
                 confirmLoading={saving}
                 destroyOnHidden
-                afterOpenChange={(open) =>
-                    open &&
+                styles={{ body: { maxHeight: "70vh", overflowY: "auto" } }}
+                afterOpenChange={(open) => {
+                    if (!open) return;
+                    const features = target?.model?.features;
                     form.setFieldsValue({
                         name: target?.model?.name ?? "",
                         displayName: target?.model?.displayName ?? "",
                         capability: target?.model?.capability ?? "image",
                         enabled: target?.model?.enabled ?? true,
                         script: "",
-                        features: { ...DEFAULT_MODEL_FEATURES, ...target?.model?.features },
-                    })
-                }
+                        features: {
+                            ...DEFAULT_MODEL_FEATURES,
+                            ...features,
+                            aspectPresets: parseAspectPresets(features?.aspectPresets, features?.aspectRatios),
+                        },
+                    });
+                }}
             >
                 <Form form={form} layout="vertical" requiredMark={false}>
                     <Form.Item name="name" label={t("admin.channels.modelName")} extra={t("admin.channels.modelNameHint")} rules={[{ required: true }]}>
@@ -322,9 +332,6 @@ export default function AdminChannelsPage() {
                             <Form.Item name={["features", "resolutions"]} label={t("admin.channels.resolutions")} extra={t("admin.channels.resolutionsHint")} rules={[{ type: "array", min: 1, message: t("admin.channels.resolutionsRequired") }]}>
                                 <Checkbox.Group options={IMAGE_RESOLUTIONS.map((value) => ({ value, label: value }))} />
                             </Form.Item>
-                            <Form.Item name={["features", "aspectRatios"]} label={t("admin.channels.aspectRatios")} extra={t("admin.channels.aspectRatiosHint")} rules={[{ type: "array", min: 1, message: t("admin.channels.aspectRatiosRequired") }]}>
-                                <Checkbox.Group options={IMAGE_ASPECT_RATIOS.map((value) => ({ value, label: value }))} />
-                            </Form.Item>
                             <Space size="large" align="start">
                                 <Form.Item name={["features", "maxCount"]} label={t("admin.channels.maxCount")} extra={t("admin.channels.maxCountHint")}>
                                     <InputNumber min={1} max={15} />
@@ -344,6 +351,11 @@ export default function AdminChannelsPage() {
                                 <InputNumber min={1} max={600} />
                             </Form.Item>
                         </>
+                    ) : null}
+                    {capability === "image" || capability === "video" ? (
+                        <Form.Item label={t("admin.channels.aspectPresets")} extra={t("admin.channels.aspectPresetsHint")} required>
+                            <AspectPresetEditor />
+                        </Form.Item>
                     ) : null}
                     <Form.Item name="script" label={t("admin.channels.script")} extra={t("admin.channels.scriptHint")}>
                         <Input.TextArea rows={8} className="font-mono text-xs" />

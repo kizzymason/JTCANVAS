@@ -18,7 +18,8 @@ const API_KEY_HEADERS = ["api key", "apikey", "api_key", "key", "密钥"];
 
 /**
  * One-shot restore of the PiAPI channel and the registrar CSV into the live pool.
- * Does not run on API boot — re-running is safe: duplicate keys are skipped, prices are not overwritten.
+ * Does not run on API boot — re-running is safe: duplicate keys are skipped, and an already-populated
+ * PiAPI model catalog is left alone.
  *
  * Usage: npx tsx src/scripts/import-piapi-csv.ts [path-to-csv]
  */

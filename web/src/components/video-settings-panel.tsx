@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
 import { ImageSettingsTheme } from "@/components/image-settings-panel";
 import { type CanvasTheme } from "@/lib/canvas-theme";
+import { defaultAspectPresets, parsePixelSize, presetSizeForQuality } from "@/lib/aspect-presets";
 import { modelFeaturesOf } from "@/lib/model-features";
 import { type AiConfig } from "@/stores/use-config-store";
 import { normalizeModelOptionValue } from "@/stores/use-config-store";
@@ -16,19 +17,10 @@ const defaultResolutionOptions = [
     { value: "480", label: "480p" },
 ];
 
-const sizeOptions = [
-    { value: "1280x720", labelKey: "landscape", width: 1280, height: 720 },
-    { value: "720x1280", labelKey: "portrait", width: 720, height: 1280 },
-    { value: "1024x1024", labelKey: "square", width: 1024, height: 1024 },
-    { value: "1792x1024", labelKey: "widescreen", width: 1792, height: 1024 },
-    { value: "1024x1792", labelKey: "tall", width: 1024, height: 1792 },
-    { value: "auto", labelKey: "auto", width: 0, height: 0 },
-];
-
 const secondOptions = [6, 10, 12, 16, 20];
 
 export const videoResolutionOptions = defaultResolutionOptions.map((item) => ({ value: item.value, label: item.label }));
-export const videoSizeOptions = sizeOptions.map((item) => ({ value: item.value, get label() { return i18n.t(`settingsPanels.video.sizes.${item.labelKey}`); } }));
+export const videoSizeOptions = defaultAspectPresets().map((item) => ({ value: item.ratio, label: item.label }));
 export const videoSecondOptions = secondOptions.map((value) => String(value));
 
 type VideoSettingsPanelProps = {
@@ -52,8 +44,10 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
     }, [features.videoResolutions]);
     const visibleSecondOptions = secondOptions.filter((value) => value <= features.maxSeconds);
     const seconds = String(Math.min(features.maxSeconds, Math.max(1, Number(config.videoSeconds) || 6)));
-    const size = normalizeVideoSizeValue(config.size);
-    const dimensions = readSizeDimensions(size);
+    const size = normalizeVideoSizeValue(config.size, features.aspectPresets);
+    const selectedPreset = features.aspectPresets.find((item) => item.ratio === size);
+    const presetPixels = selectedPreset ? parsePixelSize(presetSizeForQuality(selectedPreset, "1K") || "") : null;
+    const dimensions = readSizeDimensions(size, presetPixels);
     const resolution = useMemo(() => {
         const current = normalizeVideoResolutionValue(config.vquality);
         return resolutionOptions.some((item) => item.value === current) ? current : resolutionOptions[0]?.value || current;
@@ -73,7 +67,12 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
         if (resolution !== normalizeVideoResolutionValue(config.vquality)) onConfigChange("vquality", resolution);
         const rawSeconds = Math.max(1, Number(config.videoSeconds) || 6);
         if (rawSeconds > features.maxSeconds) onConfigChange("videoSeconds", String(features.maxSeconds));
-    }, [config.videoSeconds, config.vquality, features.maxSeconds, onConfigChange, resolution]);
+        const allowed = new Set(features.aspectPresets.map((item) => item.ratio));
+        const isCustomPixels = /^\d+x\d+$/.test(size);
+        if (!isCustomPixels && size !== "auto" && allowed.size && !allowed.has(size)) {
+            onConfigChange("size", features.aspectPresets[0]?.ratio || "auto");
+        }
+    }, [config.videoSeconds, config.vquality, features.aspectPresets, features.maxSeconds, onConfigChange, resolution, size]);
 
     return (
         <ImageSettingsTheme theme={theme}>
@@ -99,25 +98,28 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
                         <span className="text-lg opacity-45">↔</span>
                         <DimensionInput prefix="H" value={dimensions.height} disabled={size === "auto"} theme={theme} onChange={(value) => updateDimension("height", value)} />
                     </div>
-                    <div className="grid grid-cols-3 gap-2.5">
-                        {sizeOptions.map((item) => (
+                    <div className="grid grid-cols-4 gap-2.5">
+                        {features.aspectPresets.map((item) => {
+                            const preview = parsePixelSize(presetSizeForQuality(item, "1K") || "") || { width: 0, height: 0 };
+                            return (
                             <button
-                                key={item.value}
+                                key={item.ratio}
                                 type="button"
                                 className="flex h-[78px] cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border bg-transparent text-sm transition hover:opacity-80"
-                                style={{ borderColor: size === item.value ? theme.node.text : theme.node.stroke, color: theme.node.text }}
+                                style={{ borderColor: size === item.ratio ? theme.node.text : theme.node.stroke, color: theme.node.text }}
                                 onMouseDown={(event) => event.stopPropagation()}
-                                onClick={() => onConfigChange("size", item.value)}
+                                onClick={() => onConfigChange("size", item.ratio)}
                             >
-                                <SizePreview width={item.width} height={item.height} color={theme.node.text} />
-                                <span>{t(`settingsPanels.video.sizes.${item.labelKey}`)}</span>
-                                {item.value === "auto" ? null : (
+                                <SizePreview width={preview.width} height={preview.height} color={theme.node.text} />
+                                <span>{item.label || item.ratio}</span>
+                                {item.ratio === "auto" || !preview.width ? null : (
                                     <span className="text-[11px] leading-none opacity-55">
-                                        {item.value}
+                                        {preview.width}x{preview.height}
                                     </span>
                                 )}
                             </button>
-                        ))}
+                            );
+                        })}
                     </div>
                 </SettingGroup>
                 <SettingGroup title={t("settingsPanels.video.seconds")} color={theme.node.muted}>
@@ -143,8 +145,8 @@ export function videoResolutionLabel(value: string) {
 export function videoSizeLabel(value: string) {
     if (value === "adaptive" || value === "auto") return i18n.t("settingsPanels.video.adaptive");
     const size = normalizeVideoSizeValue(value);
-    const option = sizeOptions.find((item) => item.value === size);
-    return option ? i18n.t(`settingsPanels.video.sizes.${option.labelKey}`) : size;
+    const option = defaultAspectPresets().find((item) => item.ratio === size);
+    return option?.label || size;
 }
 
 export function videoSecondsLabel(value: string) {
@@ -152,10 +154,20 @@ export function videoSecondsLabel(value: string) {
     return `${value || "6"}s`;
 }
 
-export function normalizeVideoSizeValue(value: string) {
-    if (value === "auto") return "auto";
-    if (/^\d+x\d+$/.test(value || "")) return value;
-    return ["9:16", "2:3", "3:4"].includes(value) ? "720x1280" : "1280x720";
+export function normalizeVideoSizeValue(value: string, presets = defaultAspectPresets()) {
+    if (value === "auto" || value === "adaptive") return "auto";
+    const trimmed = (value || "").trim();
+    if (presets.some((item) => item.ratio === trimmed)) return trimmed;
+    if (/^\d+x\d+$/.test(trimmed)) {
+        const matched = presets.find((item) => Object.values(item.sizes).includes(trimmed) || presetSizeForQuality(item, "1K") === trimmed);
+        if (matched) return matched.ratio;
+        return trimmed;
+    }
+    if (["9:16", "2:3", "3:4"].includes(trimmed)) return trimmed;
+    if (trimmed === "1280x720") return "16:9";
+    if (trimmed === "720x1280") return "9:16";
+    if (trimmed === "1024x1024") return "1:1";
+    return trimmed || "16:9";
 }
 
 export function normalizeVideoResolutionValue(value: string) {
@@ -207,8 +219,8 @@ function SizePreview({ width, height, color }: { width: number; height: number; 
     return <span className="rounded-[3px] border-2" style={{ width: previewWidth, height: previewHeight, borderColor: color }} />;
 }
 
-function readSizeDimensions(size: string) {
+function readSizeDimensions(size: string, fallback: { width: number; height: number } | null) {
     if (size === "auto") return { width: 0, height: 0 };
     const match = size.match(/^(\d+)x(\d+)$/);
-    return { width: Number(match?.[1]) || 1280, height: Number(match?.[2]) || 720 };
+    return { width: Number(match?.[1]) || fallback?.width || 1280, height: Number(match?.[2]) || fallback?.height || 720 };
 }

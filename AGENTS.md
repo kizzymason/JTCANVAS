@@ -57,6 +57,7 @@
 - 所有入参用 `class-validator` DTO 校验并开启 `whitelist` 与 `forbidNonWhitelisted`；金额、数量、秒数等字段必须校验范围。
 - 横切关注点用 Nest 原生机制：鉴权与角色用 Guard，审计日志与幂等用 Interceptor，限流用 `@nestjs/throttler`，不要在每个 controller 里重复实现。
 - 第三方 AI 调用只允许在 worker 进程发生；API 进程只负责鉴权、计费和入队，不直接请求上游。
+- 服务启动时的渠道/模型预置只允许在目标渠道族尚无任何模型时写入；一旦管理员已添加、改名、改价或删除模型，重启和「预置」按钮都不得再插入预设模型，也不得改写已有展示名、能力或价格。
 
 ## 金额与计费规范
 

@@ -9,8 +9,10 @@ import { channelModels, channels, generationTasks } from "../../db/schema";
 import { ceilMoney, mulMoney, toMoneyString } from "../../common/money";
 import { REDIS } from "../../redis/redis.module";
 import { CryptoService } from "../crypto/crypto.service";
+import { isPublicHttpUrl } from "../storage/public-file-url";
 import { StorageService } from "../storage/storage.service";
 import { WalletService } from "../wallet/wallet.service";
+import { parseModelFeatures } from "../pricing/model-features";
 import { GENERATION_QUEUE, statusChannel, streamChannel, type GenerationJobData } from "./generation.queue";
 import { ScriptRunnerService } from "./script-runner.service";
 import { ProviderRegistry } from "./provider/provider.registry";
@@ -127,6 +129,7 @@ export class GenerationProcessor extends WorkerHost {
             audioSpeed: String(params.audioSpeed ?? ""),
             audioInstructions: String(params.audioInstructions ?? ""),
             reasoningEffort: String(params.reasoningEffort ?? "auto"),
+            aspectPresets: parseModelFeatures(row.model.features).aspectPresets,
         };
 
         const onDelta = task.capability === "text" ? (chunk: string) => void this.redis.publish(streamChannel(task.id), chunk) : undefined;
@@ -144,9 +147,26 @@ export class GenerationProcessor extends WorkerHost {
     private async loadReferences(userId: string, storageKeys: string[]): Promise<ReferenceInput[]> {
         const references: ReferenceInput[] = [];
         for (const storageKey of storageKeys) {
+            if (isPublicHttpUrl(storageKey)) {
+                const body = await downloadPublicImage(storageKey);
+                references.push({
+                    storageKey,
+                    mimeType: guessImageMime(storageKey),
+                    fileName: fileNameFor(storageKey, guessImageMime(storageKey)),
+                    body,
+                    publicUrl: storageKey,
+                });
+                continue;
+            }
             const file = await this.storage.findByStorageKey(userId, storageKey);
             if (!file) continue;
-            references.push({ storageKey, mimeType: file.mimeType, fileName: fileNameFor(storageKey, file.mimeType), body: await this.storage.read(file) });
+            references.push({
+                storageKey,
+                mimeType: file.mimeType,
+                fileName: fileNameFor(storageKey, file.mimeType),
+                body: await this.storage.read(file),
+                publicUrl: this.storage.signedPublicUrl(storageKey),
+            });
         }
         return references;
     }
@@ -182,4 +202,26 @@ function fileNameFor(storageKey: string, mimeType: string) {
     const value = mimeType.toLowerCase();
     const ext = value.startsWith("video/") ? "mp4" : value.startsWith("audio/") ? "mp3" : value.includes("jpeg") ? "jpg" : value.includes("webp") ? "webp" : "png";
     return `${safe}.${ext}`;
+}
+
+function guessImageMime(url: string) {
+    const pathname = url.split("?")[0]?.toLowerCase() ?? "";
+    if (pathname.endsWith(".jpg") || pathname.endsWith(".jpeg")) return "image/jpeg";
+    if (pathname.endsWith(".webp")) return "image/webp";
+    return "image/png";
+}
+
+async function downloadPublicImage(url: string) {
+    const response = await fetch(url, {
+        redirect: "follow",
+        headers: {
+            accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+            "user-agent": "Mozilla/5.0 (compatible; JTCANVAS/1.0; generation-worker)",
+        },
+    });
+    if (!response.ok) throw new Error(`参考图地址无法访问（HTTP ${response.status}）`);
+    const body = Buffer.from(await response.arrayBuffer());
+    if (body.byteLength > 10 * 1024 * 1024) throw new Error("单张参考图不能超过 10MB");
+    if (!body.byteLength) throw new Error("参考图地址没有返回图片");
+    return body;
 }

@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { Select } from "antd";
 import { useTranslation } from "react-i18next";
 
+import { defaultAspectPresets } from "@/lib/aspect-presets";
 import { cn } from "@/lib/utils";
 
-const sizeOptions = ["auto", "1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "9:16"];
+const sizeOptions = defaultAspectPresets().map((item) => item.ratio);
 
 type CanvasSizePickerProps = {
     value: string;

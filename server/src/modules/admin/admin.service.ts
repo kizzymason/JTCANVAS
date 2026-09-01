@@ -43,7 +43,7 @@ export class AdminService implements OnModuleInit {
         );
     }
 
-    /** Creates the PiAPI channel and four Seedream models if missing; never overwrites existing prices. */
+    /** Creates the PiAPI channel if missing. Preset models are written only when no PiAPI models exist yet. */
     async ensurePiapiChannel() {
         const result = await seedPiapiChannel(this.db);
         await this.pricing.invalidate();

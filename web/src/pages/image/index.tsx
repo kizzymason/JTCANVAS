@@ -15,6 +15,7 @@ import { useThemeStore } from "@/stores/use-theme-store";
 import { nanoid } from "nanoid";
 import { formatBytes, formatDuration } from "@/lib/image-utils";
 import { requestEdit, requestGeneration } from "@/services/api/image";
+import { fileNameFromImageUrl, publicImageUrlsFromText } from "@/services/api/reference-upload";
 import { resolveImageUrl, uploadImage } from "@/services/image-storage";
 import { PriceEstimate, useCanAffordGeneration } from "@/components/price-estimate";
 import { pricingSpecFor } from "@/lib/pricing-spec";
@@ -134,18 +135,26 @@ export default function ImagePage() {
 
     const addReferencesFromClipboard = async () => {
         try {
-            const items = await navigator.clipboard.read();
-            const blobs = await Promise.all(items.flatMap((item) => item.types.filter((type) => type.startsWith("image/")).map((type) => item.getType(type))));
-            if (!blobs.length) {
-                message.error(t("imageWorkbench.clipboardEmpty"));
-                return;
+            const textUrls = publicImageUrlsFromText(await navigator.clipboard.readText().catch(() => ""));
+            let blobs: Blob[] = [];
+            try {
+                const items = await navigator.clipboard.read();
+                blobs = await Promise.all(items.flatMap((item) => item.types.filter((type) => type.startsWith("image/")).map((type) => item.getType(type))));
+            } catch {
+                blobs = [];
             }
-            const nextReferences = await Promise.all(
+            const uploaded = await Promise.all(
                 blobs.map(async (blob, index) => {
                     const image = await uploadImage(blob);
                     return { id: nanoid(), name: `clipboard-${index + 1}.png`, type: image.mimeType, dataUrl: image.url, storageKey: image.storageKey };
                 }),
             );
+            const linked = textUrls.map((url) => ({ id: nanoid(), name: fileNameFromImageUrl(url), type: "image/png", dataUrl: url, url }));
+            const nextReferences = [...uploaded, ...linked];
+            if (!nextReferences.length) {
+                message.error(t("imageWorkbench.clipboardEmpty"));
+                return;
+            }
             setReferences((value) => [...value, ...nextReferences]);
             message.success(t("imageWorkbench.clipboardAdded", { count: nextReferences.length }));
         } catch {
@@ -432,6 +441,7 @@ export default function ImagePage() {
                                 </div>
                                 <div
                                     className={`hover-scrollbar hover-scrollbar-hint relative flex min-h-24 w-full min-w-0 max-w-full gap-2 overflow-x-scroll overflow-y-hidden rounded-lg border border-dashed p-2 pb-3 overscroll-x-contain transition-colors ${isReferenceDragActive ? "border-stone-900 bg-stone-100/80 dark:border-stone-100 dark:bg-stone-900/80" : "border-stone-300 dark:border-stone-700"}`}
+                                    tabIndex={0}
                                     onDragEnter={(event) => {
                                         event.preventDefault();
                                         dragDepthRef.current += 1;
@@ -451,6 +461,16 @@ export default function ImagePage() {
                                         dragDepthRef.current = 0;
                                         setIsReferenceDragActive(false);
                                         void addReferences(event.dataTransfer.files);
+                                    }}
+                                    onPaste={(event) => {
+                                        const urls = publicImageUrlsFromText(event.clipboardData.getData("text"));
+                                        if (!urls.length) return;
+                                        event.preventDefault();
+                                        setReferences((value) => [
+                                            ...value,
+                                            ...urls.map((url) => ({ id: nanoid(), name: fileNameFromImageUrl(url), type: "image/png", dataUrl: url, url })),
+                                        ]);
+                                        message.success(t("imageWorkbench.clipboardAdded", { count: urls.length }));
                                     }}
                                     onWheel={(event) => {
                                         if (event.currentTarget.scrollWidth <= event.currentTarget.clientWidth) return;

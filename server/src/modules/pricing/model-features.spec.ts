@@ -8,7 +8,8 @@ describe("model features", () => {
         expect(features.maxCount).toBe(15);
         expect(features.supportsTransparent).toBe(false);
         expect(features.aspectRatios).toContain("auto");
-        expect(features.aspectRatios).toHaveLength(8);
+        expect(features.aspectRatios).toHaveLength(13);
+        expect(features.aspectPresets.find((item) => item.ratio === "16:9")?.sizes["1K"]).toBe("1280x720");
     });
 
     it("keeps only known image resolutions and ratios", () => {
@@ -22,6 +23,8 @@ describe("model features", () => {
         expect(features.maxCount).toBe(15);
         expect(features.supportsTransparent).toBe(true);
         expect(features.aspectRatios).toEqual(["16:9", "1:1"]);
+        expect(features.aspectPresets.map((item) => item.ratio)).toEqual(["16:9", "1:1"]);
+        expect(features.aspectPresets[0]?.sizes["2K"]).toBe("2560x1440");
     });
 
     it("maps quality aliases onto resolution tiers", () => {
@@ -42,5 +45,14 @@ describe("model features", () => {
         expect(() => assertVideoGenerationFeatures(features, { seconds: 12, resolution: "720" })).toThrow(/最长 8 秒/);
         expect(() => assertVideoGenerationFeatures(features, { seconds: 6, resolution: "480p" })).toThrow(/清晰度/);
         expect(() => assertVideoGenerationFeatures(features, { seconds: 6, resolution: "720" })).not.toThrow();
+    });
+
+    it("keeps aspect presets isolated to the parsed model payload", () => {
+        const modelA = parseModelFeatures({ aspectPresets: [{ ratio: "16:9", sizes: { "1K": "1280x720" } }] });
+        const modelB = parseModelFeatures({ aspectRatios: ["1:1", "9:16"] });
+        expect(modelA.aspectRatios).toEqual(["16:9"]);
+        expect(modelB.aspectRatios).toEqual(["1:1", "9:16"]);
+        expect(modelA.aspectPresets[0]?.sizes["2K"]).toBe("2560x1440");
+        expect(modelB.aspectPresets.find((item) => item.ratio === "16:9")).toBeUndefined();
     });
 });

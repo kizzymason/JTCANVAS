@@ -42,6 +42,15 @@ export const PIAPI_SEEDREAM_MODELS = [
 
 export type PiapiSeedreamModel = (typeof PIAPI_SEEDREAM_MODELS)[number];
 
+/**
+ * Preset models and prices are a first-boot catalog only.
+ * Any existing PiAPI model means an admin already owns the list — including
+ * renamed rows such as "Seedream 5 Pro [低价A渠道][推荐]".
+ */
+export function shouldWritePiapiPresetCatalog(existingPiapiModelCount: number) {
+    return existingPiapiModelCount <= 0;
+}
+
 export type PiapiSeedPriceRow = {
     spec: string | null;
     unitPrice: string;

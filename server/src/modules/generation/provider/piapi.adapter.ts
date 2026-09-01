@@ -1,14 +1,23 @@
 import { Injectable } from "@nestjs/common";
 import axios from "axios";
-import { badRequest } from "../../../common/errors";
+import { AppError, badRequest } from "../../../common/errors";
 import type { Capability } from "../../pricing/pricing.types";
+import { isPublicHttpUrl } from "../../storage/public-file-url";
 import { PiapiPoolService } from "../piapi-pool.service";
 import { delay, fetchBinary, throwIfAborted } from "./openai.adapter";
-import { ProviderAdapter, type GeneratedBinary, type GenerationOutput, type GenerationRequest, type ProviderCredentials } from "./provider.types";
+import {
+    assertPiapiReferences,
+    ephemeralFileData,
+    ephemeralFileName,
+    ephemeralUploadUrl,
+    PIAPI_EPHEMERAL_UPLOAD_URL,
+    PIAPI_MAX_REFERENCE_IMAGES,
+    piapiSeedreamInput,
+} from "./piapi-references";
+import { ProviderAdapter, type GeneratedBinary, type GenerationOutput, type GenerationRequest, type ProviderCredentials, type ReferenceInput } from "./provider.types";
 
 const POLL_INTERVAL_MS = 2500;
 const POLL_TIMEOUT_MS = 300_000;
-const MAX_REFERENCE_IMAGES = 10;
 const OUTPUT_FORMAT = "png";
 const PIAPI_ASPECT_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "4:5", "5:4", "21:9"];
 const LITE_SIZES = ["2K", "3K"];
@@ -19,11 +28,10 @@ type PiapiEnvelope<T> = { code?: number; data?: T; message?: string };
 type PiapiTask = { task_id?: string; status?: string; output?: { image_url?: string; image_urls?: string[] } | null; error?: { message?: string } | null };
 
 /**
- * PiAPI Seedream. Unlike the other adapters this one ignores the channel credential entirely and
- * draws a key from the account pool per task, which is what makes exhaustion invisible to the user.
+ * PiAPI Seedream. Channel credentials are ignored; each call draws a key from the account pool.
  *
- * Reference images must be publicly reachable URLs: Seedream rejects data URIs, and PiAPI's own
- * upload host sends no CORS headers and is plan-gated, so a locally stored image cannot be used.
+ * Seedream only accepts public http(s) `image_urls`. Frontend uploads land in private storage, so
+ * the worker re-hosts those bytes on PiAPI's ephemeral CDN and forwards the returned URLs.
  */
 @Injectable()
 export class PiapiAdapter extends ProviderAdapter {
@@ -39,12 +47,13 @@ export class PiapiAdapter extends ProviderAdapter {
 
     async generate(_credentials: ProviderCredentials, request: GenerationRequest): Promise<GenerationOutput> {
         if (!this.supports(request.capability)) throw badRequest("PIAPI_UNSUPPORTED", "PiAPI 渠道当前只支持图片生成");
-        if (request.mask) throw badRequest("PIAPI_MASK_UNSUPPORTED", "PiAPI 渠道暂不支持蒙版编辑");
-        if (request.references.length) throw badRequest("PIAPI_REFERENCE_UNSUPPORTED", "PiAPI 图生图需要公网可访问的图片地址，当前参考图保存在服务端私有存储，暂不支持");
+        assertPiapiReferences(request.references, request.mask);
 
         const size = outputSize(request.model, request.quality);
         const aspectRatio = closestRatio(request.size);
         const prompt = request.systemPrompt?.trim() ? `${request.systemPrompt.trim()}\n\n${request.prompt}` : request.prompt;
+        const imageUrls = await this.resolveImageUrls(request.references, request.signal);
+        const input = piapiSeedreamInput({ prompt, aspectRatio, size, outputFormat: OUTPUT_FORMAT, imageUrls });
 
         // Each requested image is an independent PiAPI task, each drawing its own key from the pool.
         const results = await Promise.all(
@@ -52,7 +61,7 @@ export class PiapiAdapter extends ProviderAdapter {
                 this.pool.runWithKey(async (apiKey) => {
                     const created = await axios.post<PiapiEnvelope<PiapiTask>>(
                         "https://api.piapi.ai/api/v1/task",
-                        { model: "seedream", task_type: request.model, input: { prompt, aspect_ratio: aspectRatio, output_format: OUTPUT_FORMAT, size } },
+                        { model: "seedream", task_type: request.model, input },
                         { headers: { "x-api-key": apiKey, "Content-Type": "application/json" }, signal: request.signal },
                     );
                     const task = readEnvelope(created.data, "PiAPI 任务创建失败");
@@ -65,6 +74,53 @@ export class PiapiAdapter extends ProviderAdapter {
         const binaries: GeneratedBinary[] = [];
         for (const urls of results) for (const url of urls) binaries.push(await fetchBinary(url, request.signal));
         return { binaries, actualQuantity: binaries.length };
+    }
+
+    /**
+     * Already-public URLs (not our /api/files token links) go straight into `image_urls`.
+     * Stored files are re-hosted on PiAPI's ephemeral CDN; a Creator-plan 403 falls back to APP_PUBLIC_URL.
+     */
+    private async resolveImageUrls(references: ReferenceInput[], signal?: AbortSignal) {
+        if (!references.length) return [];
+        const slots: Array<{ type: "ready"; url: string } | { type: "host"; reference: ReferenceInput }> = references.map((reference) => {
+            if (reference.publicUrl && isPublicHttpUrl(reference.publicUrl) && !reference.publicUrl.includes("/api/files/")) {
+                return { type: "ready", url: reference.publicUrl };
+            }
+            return { type: "host", reference };
+        });
+        const toHost = slots.filter((slot): slot is { type: "host"; reference: ReferenceInput } => slot.type === "host").map((slot) => slot.reference);
+        try {
+            const hosted = toHost.length ? await this.hostReferences(toHost, signal) : [];
+            let index = 0;
+            return slots.map((slot) => (slot.type === "ready" ? slot.url : hosted[index++]));
+        } catch (error) {
+            if (!isPiapiUploadPlanError(error)) throw error;
+            const fallback = references.map((reference) => reference.publicUrl).filter((url): url is string => Boolean(url && isPublicHttpUrl(url)));
+            if (fallback.length === references.length) return fallback;
+            throw error;
+        }
+    }
+    private async hostReferences(references: ReferenceInput[], signal?: AbortSignal) {
+        return this.pool.runWithKey((apiKey) => Promise.all(references.map((reference) => this.uploadReference(apiKey, reference, signal))));
+    }
+
+    private async uploadReference(apiKey: string, reference: ReferenceInput, signal?: AbortSignal) {
+        try {
+            const response = await axios.post<PiapiEnvelope<{ url?: string }>>(
+                PIAPI_EPHEMERAL_UPLOAD_URL,
+                { file_name: ephemeralFileName(reference.fileName, reference.mimeType), file_data: ephemeralFileData(reference.body, reference.mimeType) },
+                { headers: { "x-api-key": apiKey, "Content-Type": "application/json" }, signal },
+            );
+            return ephemeralUploadUrl(response.data);
+        } catch (error) {
+            if (axios.isAxiosError(error)) {
+                const status = error.response?.status;
+                const data = error.response?.data as { message?: string } | undefined;
+                if (status === 403) throw badRequest("PIAPI_UPLOAD_PLAN", "PiAPI 临时图床需要 Creator 套餐以上，无法上传参考图");
+                throw badRequest("PIAPI_UPLOAD_FAILED", data?.message || "参考图上传到 PiAPI 临时图床失败");
+            }
+            throw error;
+        }
     }
 
     /** Documented as synchronous but actually returns `pending`, so the task has to be polled. */
@@ -131,4 +187,10 @@ function closestRatio(size: string | undefined) {
     });
 }
 
-export { MAX_REFERENCE_IMAGES };
+export { PIAPI_MAX_REFERENCE_IMAGES as MAX_REFERENCE_IMAGES };
+
+function isPiapiUploadPlanError(error: unknown) {
+    if (!(error instanceof AppError)) return false;
+    const body = error.getResponse();
+    return typeof body === "object" && body !== null && "code" in body && (body as { code: string }).code === "PIAPI_UPLOAD_PLAN";
+}
