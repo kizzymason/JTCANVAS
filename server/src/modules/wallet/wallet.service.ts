@@ -4,7 +4,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { DB, type Database, type DbTransaction } from "../../db/db.module";
 import { orders, users, walletLedger, wallets } from "../../db/schema";
 import { conflict, insufficientBalance, notFound } from "../../common/errors";
-import { gte, subMoney, toMoneyString, type MoneyInput } from "../../common/money";
+import { formatMoney, gte, subMoney, toMoneyString, type MoneyInput } from "../../common/money";
 import type { Paginated } from "../../common/types";
 
 type LedgerType = (typeof walletLedger.$inferInsert)["type"];
@@ -135,6 +135,97 @@ export class WalletService {
         });
     }
 
+    /** Inserts a pending gateway order. Credit happens later in `fulfillPendingOrder` after notify/query. */
+    async createPendingOrder(params: { userId: string; amount: MoneyInput; paymentProvider: string; metadata: Record<string, unknown> }) {
+        const amount = toMoneyString(params.amount);
+        await this.ensureWallet(params.userId);
+        const [order] = await this.db
+            .insert(orders)
+            .values({
+                userId: params.userId,
+                orderNo: createOrderNo(),
+                amount,
+                status: "pending",
+                paymentProvider: params.paymentProvider,
+                metadata: params.metadata,
+            })
+            .returning();
+        return order;
+    }
+
+    async getOwnedOrder(userId: string, orderNo: string) {
+        const [order] = await this.db
+            .select()
+            .from(orders)
+            .where(and(eq(orders.orderNo, orderNo), eq(orders.userId, userId)))
+            .limit(1);
+        if (!order) throw notFound("订单不存在");
+        return order;
+    }
+
+    /**
+     * Settles a previously created pending order. Locks the order row first so duplicate notifies
+     * cannot insert a second ledger row. `paidAmount` must match the order's sale price at 2 d.p.
+     * Wallet credit uses `metadata.creditAmount` when the SKU face value differs from what was paid.
+     */
+    async fulfillPendingOrder(params: { orderNo: string; paidAmount: MoneyInput; providerTxnId: string; note?: string }) {
+        return this.db.transaction(async (tx) => {
+            const [order] = await tx.select().from(orders).where(eq(orders.orderNo, params.orderNo)).for("update").limit(1);
+            if (!order) throw notFound("订单不存在");
+            if (order.status === "paid") return { alreadyPaid: true as const, order };
+            if (order.status !== "pending") throw conflict("ORDER_NOT_PAYABLE", "订单状态不可支付");
+            if (formatMoney(order.amount) !== formatMoney(params.paidAmount)) {
+                throw conflict("ORDER_AMOUNT_MISMATCH", "支付金额与订单不符");
+            }
+
+            const metadata = order.metadata ?? {};
+            const creditRaw = metadata.creditAmount;
+            const creditAmount = toMoneyString(typeof creditRaw === "string" && creditRaw ? creditRaw : order.amount);
+
+            await this.lock(tx, order.userId);
+
+            const [updatedOrder] = await tx
+                .update(orders)
+                .set({
+                    status: "paid",
+                    providerTxnId: params.providerTxnId || order.providerTxnId,
+                    paidAt: new Date(),
+                    metadata: { ...metadata, paidAmount: formatMoney(params.paidAmount) },
+                    updatedAt: new Date(),
+                })
+                .where(and(eq(orders.id, order.id), eq(orders.status, "pending")))
+                .returning();
+
+            if (!updatedOrder) {
+                const [again] = await tx.select().from(orders).where(eq(orders.id, order.id)).limit(1);
+                return { alreadyPaid: true as const, order: again ?? order };
+            }
+
+            const [updated] = await tx
+                .update(wallets)
+                .set({
+                    balance: sql`${wallets.balance} + ${creditAmount}::numeric`,
+                    totalRecharged: sql`${wallets.totalRecharged} + ${creditAmount}::numeric`,
+                    updatedAt: new Date(),
+                })
+                .where(eq(wallets.userId, order.userId))
+                .returning();
+
+            await this.appendLedger(tx, {
+                userId: order.userId,
+                type: "recharge",
+                amount: creditAmount,
+                balanceAfter: updated.balance,
+                frozenAfter: updated.frozen,
+                orderId: order.id,
+                note: params.note ?? "在线充值",
+                metadata: { salePrice: order.amount, creditAmount, providerTxnId: params.providerTxnId },
+            });
+
+            return { alreadyPaid: false as const, order: updatedOrder, wallet: updated };
+        });
+    }
+
     /** Adds spendable balance. Every increase creates an order so its origin is auditable. */
     async credit(params: {
         userId: string;
@@ -153,7 +244,7 @@ export class WalletService {
                 .insert(orders)
                 .values({
                     userId: params.userId,
-                    orderNo: orderNo(),
+                    orderNo: createOrderNo(),
                     amount,
                     status: "paid",
                     paymentProvider: params.paymentProvider,
@@ -326,7 +417,7 @@ export class WalletService {
     }
 }
 
-function orderNo() {
+export function createOrderNo() {
     const stamp = new Date().toISOString().replace(/\D/g, "").slice(0, 14);
     return `IC${stamp}${randomBytes(4).toString("hex").toUpperCase()}`;
 }

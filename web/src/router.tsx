@@ -25,6 +25,8 @@ const AdminChannelsPage = lazy(() => import("@/pages/admin/channels"));
 const AdminPricingPage = lazy(() => import("@/pages/admin/pricing"));
 const AdminFinancePage = lazy(() => import("@/pages/admin/finance"));
 const AdminCardsPage = lazy(() => import("@/pages/admin/cards"));
+const AdminPaymentsPage = lazy(() => import("@/pages/admin/payments"));
+const AdminPackagesPage = lazy(() => import("@/pages/admin/packages"));
 const AdminTasksPage = lazy(() => import("@/pages/admin/tasks"));
 const AdminStoragePage = lazy(() => import("@/pages/admin/storage"));
 const AdminServicesPage = lazy(() => import("@/pages/admin/services"));
@@ -111,6 +113,8 @@ export const router = createBrowserRouter([
                     { path: "pricing", element: <Lazy><AdminPricingPage /></Lazy> },
                     { path: "finance", element: <Lazy><AdminFinancePage /></Lazy> },
                     { path: "cards", element: <Lazy><AdminCardsPage /></Lazy> },
+                    { path: "payments", element: <Lazy><AdminPaymentsPage /></Lazy> },
+                    { path: "packages", element: <Lazy><AdminPackagesPage /></Lazy> },
                     { path: "tasks", element: <Lazy><AdminTasksPage /></Lazy> },
                     { path: "storage", element: <Lazy><AdminStoragePage /></Lazy> },
                     { path: "services", element: <Lazy><AdminServicesPage /></Lazy> },

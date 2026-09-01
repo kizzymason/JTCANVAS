@@ -5,7 +5,6 @@ description: Planned follow-up work
 
 # TODO
 
-- Payment gateways: the `orders` table already carries a `payment_provider` column and the wallet top-up modal reserves space for online payment, so adding WeChat Pay or Alipay needs no schema change. Today the only ways money enters a wallet are redeem cards and admin adjustments.
 - PiAPI pool follow-up: balances are calibrated on import, manual refresh and after each successful generation, with no scheduled sweep. Larger pools may need a concurrency cap and a refresh schedule.
 - Workbench history is still a browser-local cache: the authoritative record lives server-side (My wallet usage history and the admin generations page), but the history list in the image and video studios still reads localforage, so it does not follow the user across devices.
 - Storage migration tooling: the admin area can switch between local disk and S3, but the switch only affects new files. Existing files are not moved and need a background migration job.

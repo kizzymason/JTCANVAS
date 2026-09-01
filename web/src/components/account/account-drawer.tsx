@@ -3,7 +3,7 @@ import type { ColumnsType } from "antd/es/table";
 import { ChevronRight, History, ReceiptText, ScrollText, Shield } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Navigate } from "react-router-dom";
+import { Navigate, useSearchParams } from "react-router-dom";
 
 import { AccountRechargeModal } from "@/components/account/account-recharge-modal";
 import { LocalDataMigrationCard } from "@/components/account/local-data-migration-card";
@@ -32,13 +32,25 @@ type AccountSection = "ledger" | "usage" | "orders" | "security";
  */
 export function AccountDrawer() {
     const { t } = useTranslation();
+    const { message } = App.useApp();
     const isOpen = useAccountDrawerStore((state) => state.isOpen);
     const close = useAccountDrawerStore((state) => state.close);
+    const openDrawer = useAccountDrawerStore((state) => state.open);
     const refreshWallet = useAuthStore((state) => state.refreshWallet);
     const logout = useAuthStore((state) => state.logout);
+    const [searchParams, setSearchParams] = useSearchParams();
     const [section, setSection] = useState<AccountSection | null>(null);
     const [rechargeOpen, setRechargeOpen] = useState(false);
     const [withdrawOpen, setWithdrawOpen] = useState(false);
+
+    useEffect(() => {
+        if (searchParams.get("recharge") !== "1") return;
+        openDrawer();
+        void refreshWallet().then(() => message.success(t("account.paidSuccessRefresh")));
+        const next = new URLSearchParams(searchParams);
+        next.delete("recharge");
+        setSearchParams(next, { replace: true });
+    }, [message, openDrawer, refreshWallet, searchParams, setSearchParams, t]);
 
     useEffect(() => {
         if (!isOpen) return;

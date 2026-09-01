@@ -6,6 +6,8 @@ import type { AuthUser } from "../../common/types";
 import { AuditService } from "../audit/audit.service";
 import { PiapiPoolService } from "../generation/piapi-pool.service";
 import { SettingsService } from "../settings/settings.service";
+import { PaymentsService } from "../payments/payments.service";
+import { CreatePaymentChannelDto, RechargeSettingsDto, UpdatePaymentChannelDto, UpsertRechargePackageDto } from "../payments/dto/payments.dto";
 import { VisitorsService } from "../visitors/visitors.service";
 import { VisitorEventsQueryDto } from "../visitors/dto/visitors.dto";
 import { RedeemService } from "../wallet/redeem.service";
@@ -26,6 +28,7 @@ export class AdminController {
         private readonly piapi: PiapiPoolService,
         private readonly settings: SettingsService,
         private readonly visitors: VisitorsService,
+        private readonly payments: PaymentsService,
         private readonly audit: AuditService,
         private readonly openapi: OpenApiService,
     ) {}
@@ -213,6 +216,73 @@ export class AdminController {
     async deleteCardBatches(@Body() body: DeleteManyDto) {
         const removed = await this.redeem.deleteBatches(body.ids);
         return { removed, audit: { targetId: body.ids[0] ?? "", after: { ids: body.ids, removed } } };
+    }
+
+    @Get("payments/channels")
+    @ApiOperation({ summary: "支付渠道列表，密钥只返回是否已配置" })
+    paymentChannels() {
+        return this.payments.listAdminChannels();
+    }
+
+    @Post("payments/channels")
+    @Audit({ action: "payment_channel.create", targetType: "payment_channel" })
+    @ApiOperation({ summary: "新增支付渠道" })
+    createPaymentChannel(@Body() body: CreatePaymentChannelDto) {
+        return this.payments.createChannel(body);
+    }
+
+    @Patch("payments/channels/:id")
+    @Audit({ action: "payment_channel.update", targetType: "payment_channel" })
+    @ApiOperation({ summary: "修改支付渠道，secret 留空表示不改" })
+    updatePaymentChannel(@Param("id") id: string, @Body() body: UpdatePaymentChannelDto) {
+        return this.payments.updateChannel(id, body);
+    }
+
+    @Delete("payments/channels/:id")
+    @Audit({ action: "payment_channel.delete", targetType: "payment_channel" })
+    @ApiOperation({ summary: "删除支付渠道" })
+    deletePaymentChannel(@Param("id") id: string) {
+        return this.payments.deleteChannel(id);
+    }
+
+    @Get("payments/channels/:id/balance")
+    @ApiOperation({ summary: "查询支付渠道在网关侧的账户余额" })
+    paymentChannelBalance(@Param("id") id: string) {
+        return this.payments.channelBalance(id);
+    }
+
+    @Get("recharge-packages")
+    @ApiOperation({ summary: "充值套餐与自定义充值设置" })
+    rechargePackages() {
+        return this.payments.listAdminPackages();
+    }
+
+    @Post("recharge-packages")
+    @Audit({ action: "recharge_package.create", targetType: "recharge_package" })
+    @ApiOperation({ summary: "新增充值套餐" })
+    createRechargePackage(@Body() body: UpsertRechargePackageDto) {
+        return this.payments.createPackage(body);
+    }
+
+    @Patch("recharge-packages/:id")
+    @Audit({ action: "recharge_package.update", targetType: "recharge_package" })
+    @ApiOperation({ summary: "修改充值套餐" })
+    updateRechargePackage(@Param("id") id: string, @Body() body: UpsertRechargePackageDto) {
+        return this.payments.updatePackage(id, body);
+    }
+
+    @Delete("recharge-packages/:id")
+    @Audit({ action: "recharge_package.delete", targetType: "recharge_package" })
+    @ApiOperation({ summary: "删除充值套餐" })
+    deleteRechargePackage(@Param("id") id: string) {
+        return this.payments.deletePackage(id);
+    }
+
+    @Patch("recharge-settings")
+    @Audit({ action: "recharge_settings.update", targetType: "settings" })
+    @ApiOperation({ summary: "保存自定义充值开关与限额" })
+    saveRechargeSettings(@CurrentUser() user: AuthUser, @Body() body: RechargeSettingsDto) {
+        return this.payments.saveRechargeSettings(body, user.id);
     }
 
     @Get("settings")
