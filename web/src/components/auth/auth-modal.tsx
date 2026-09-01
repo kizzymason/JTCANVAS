@@ -7,11 +7,13 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 
 import { SegmentedSwitch } from "@/components/ui/segmented-switch";
+import { RegisterSlider } from "@/components/auth/register-slider";
 import { ApiError } from "@/services/api/client";
+import { cachedDeviceFingerprint } from "@/lib/device-fingerprint";
 import { useAuthModalStore, type AuthModalMode } from "@/stores/use-auth-modal-store";
 import { useAuthStore } from "@/stores/use-auth-store";
 
-type FormValues = { username: string; password: string; confirmPassword?: string };
+type FormValues = { username: string; password: string; confirmPassword?: string; website?: string };
 
 const PANEL_SPRING = { type: "spring", stiffness: 380, damping: 32, mass: 0.82 } as const;
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -27,6 +29,7 @@ export function AuthModal() {
     const reduceMotion = useReducedMotion();
     const [form] = Form.useForm<FormValues>();
     const [submitting, setSubmitting] = useState(false);
+    const [sliderToken, setSliderToken] = useState<string | null>(null);
 
     const open = useAuthModalStore((state) => state.open);
     const mode = useAuthModalStore((state) => state.mode);
@@ -61,20 +64,34 @@ export function AuthModal() {
         if (!open) {
             form.resetFields();
             setSubmitting(false);
+            setSliderToken(null);
         }
     }, [form, open]);
 
     const switchMode = (next: AuthModalMode) => {
         if (next === mode) return;
         setMode(next);
-        form.resetFields(["confirmPassword"]);
+        form.resetFields(["confirmPassword", "website"]);
+        setSliderToken(null);
     };
 
     const submit = async (values: FormValues) => {
         setSubmitting(true);
         try {
-            if (mode === "register") await register(values.username.trim(), values.password);
-            else await login(values.username.trim(), values.password);
+            if (mode === "register") {
+                if (!sliderToken) {
+                    message.error(t("auth.sliderRequired"));
+                    return;
+                }
+                const fingerprint = await cachedDeviceFingerprint();
+                await register(values.username.trim(), values.password, {
+                    sliderToken,
+                    fingerprint,
+                    website: values.website,
+                });
+            } else {
+                await login(values.username.trim(), values.password);
+            }
             message.success(t(mode === "register" ? "auth.registerSuccess" : "auth.loginSuccess"));
             closeModal();
             navigate(redirectTo, { replace: true });
@@ -188,9 +205,27 @@ export function AuthModal() {
                                 ) : null}
                             </AnimatePresence>
 
+                            {mode === "register" ? (
+                                <RegisterSlider onToken={setSliderToken} disabled={submitting || registrationClosed} />
+                            ) : null}
+
+                            <div className="pointer-events-none absolute -left-[10000px] h-px w-px overflow-hidden" aria-hidden="true">
+                                <Form.Item name="website" noStyle>
+                                    <Input tabIndex={-1} autoComplete="off" />
+                                </Form.Item>
+                            </div>
+
                             {registrationClosed ? <p className="mb-4 text-sm text-amber-600">{t("auth.registrationClosed")}</p> : null}
 
-                            <Button type="primary" size="large" htmlType="submit" block loading={submitting} disabled={registrationClosed} icon={submitting ? <Loader2 className="size-4 animate-spin" /> : undefined}>
+                            <Button
+                                type="primary"
+                                size="large"
+                                htmlType="submit"
+                                block
+                                loading={submitting}
+                                disabled={registrationClosed || (mode === "register" && !sliderToken)}
+                                icon={submitting ? <Loader2 className="size-4 animate-spin" /> : undefined}
+                            >
                                 {t(mode === "register" ? "auth.registerAction" : "auth.loginAction")}
                             </Button>
                         </Form>

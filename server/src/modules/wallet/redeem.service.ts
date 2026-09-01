@@ -1,22 +1,28 @@
 import { randomInt } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
 import { and, desc, eq, ilike, inArray, sql } from "drizzle-orm";
+import Redis from "ioredis";
 import { DB, type Database } from "../../db/db.module";
 import { redeemCardBatches, redeemCards } from "../../db/schema";
-import { badRequest, conflict, notFound } from "../../common/errors";
+import { AppError, badRequest, conflict, notFound, tooManyRequests } from "../../common/errors";
 import { toMoneyString, type MoneyInput } from "../../common/money";
 import type { Paginated } from "../../common/types";
+import { REDIS } from "../../redis/redis.module";
 import { WalletService } from "./wallet.service";
 
 /** Ambiguous glyphs (0/O, 1/I/L) are excluded so codes survive being read aloud or retyped. */
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 const CODE_GROUPS = 4;
 const CODE_GROUP_SIZE = 4;
+const REDEEM_FAIL_WINDOW_SECONDS = 15 * 60;
+const REDEEM_FAIL_LIMIT = 10;
+const REDEEM_COOLDOWN_SECONDS = 15 * 60;
 
 @Injectable()
 export class RedeemService {
     constructor(
         @Inject(DB) private readonly db: Database,
+        @Inject(REDIS) private readonly redis: Redis,
         private readonly wallet: WalletService,
     ) {}
 
@@ -43,11 +49,26 @@ export class RedeemService {
         });
     }
 
+    async redeem(params: { userId: string; code: string; ip: string }) {
+        await this.assertNotCooling(params.userId, params.ip);
+        try {
+            const result = await this.redeemCard(params);
+            await this.clearFails(params.userId, params.ip);
+            return result;
+        } catch (error) {
+            if (isRedeemAttemptFailure(error)) {
+                await this.recordFail(params.userId, params.ip);
+                if (isHiddenCardStatus(error)) throw badRequest("CARD_INVALID", "卡密无效或已使用");
+            }
+            throw error;
+        }
+    }
+
     /**
      * Consumes a card and credits the wallet. The status transition is guarded inside the UPDATE's
      * WHERE clause, so two concurrent redemptions of the same code cannot both succeed.
      */
-    async redeem(params: { userId: string; code: string }) {
+    private async redeemCard(params: { userId: string; code: string }) {
         const code = params.code.trim().toUpperCase().replace(/\s+/g, "");
         const [card] = await this.db.select().from(redeemCards).where(eq(redeemCards.code, code)).limit(1);
         if (!card) throw notFound("卡密不存在");
@@ -148,6 +169,40 @@ export class RedeemService {
         const cards = await this.db.select({ code: redeemCards.code, status: redeemCards.status }).from(redeemCards).where(eq(redeemCards.batchId, batchId));
         return cards;
     }
+
+    private async assertNotCooling(userId: string, ip: string) {
+        const cooling = await this.redis.exists(`redeem:cd:user:${userId}`, `redeem:cd:ip:${ip || "unknown"}`);
+        if (cooling) throw tooManyRequests("尝试过于频繁", "REDEEM_COOLDOWN");
+    }
+
+    private async recordFail(userId: string, ip: string) {
+        const userCount = await this.incrWindow(`redeem:fail:user:${userId}`, REDEEM_FAIL_WINDOW_SECONDS);
+        const ipCount = await this.incrWindow(`redeem:fail:ip:${ip || "unknown"}`, REDEEM_FAIL_WINDOW_SECONDS);
+        if (userCount >= REDEEM_FAIL_LIMIT) await this.redis.set(`redeem:cd:user:${userId}`, "1", "EX", REDEEM_COOLDOWN_SECONDS);
+        if (ipCount >= REDEEM_FAIL_LIMIT) await this.redis.set(`redeem:cd:ip:${ip || "unknown"}`, "1", "EX", REDEEM_COOLDOWN_SECONDS);
+    }
+
+    private async clearFails(userId: string, ip: string) {
+        await this.redis.del(`redeem:fail:user:${userId}`, `redeem:fail:ip:${ip || "unknown"}`, `redeem:cd:user:${userId}`, `redeem:cd:ip:${ip || "unknown"}`);
+    }
+
+    private async incrWindow(key: string, ttlSeconds: number) {
+        const count = await this.redis.incr(key);
+        if (count === 1) await this.redis.expire(key, ttlSeconds);
+        return count;
+    }
+}
+
+function isRedeemAttemptFailure(error: unknown) {
+    if (!(error instanceof AppError)) return false;
+    const body = error.getResponse() as { code?: string };
+    return body.code === "NOT_FOUND" || body.code === "CARD_VOID" || body.code === "CARD_USED" || body.code === "CARD_EXPIRED" || body.code === "CARD_INVALID";
+}
+
+function isHiddenCardStatus(error: unknown) {
+    if (!(error instanceof AppError)) return false;
+    const body = error.getResponse() as { code?: string };
+    return body.code === "NOT_FOUND" || body.code === "CARD_VOID" || body.code === "CARD_USED";
 }
 
 function generateCode() {

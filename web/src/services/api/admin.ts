@@ -84,6 +84,34 @@ export type AdminReconcileMismatch = { userId: string; username: string; expecte
 export type AdminCardBatch = { id: string; name: string; faceValue: string; quantity: number; usedCount: number; voidCount: number; expiresAt: string | null; createdAt: string };
 export type AdminCard = { id: string; code: string; faceValue: string; status: "unused" | "used" | "void"; redeemedAt: string | null; expiresAt: string | null };
 export type AdminAuditLog = { id: string; actorName: string; action: string; targetType: string; targetId: string; before: unknown; after: unknown; ip: string; createdAt: string };
+export type VisitorKind = "human" | "bot" | "suspected";
+export type VisitorSummaryDay = {
+    date: string;
+    pv: number;
+    uv: number;
+    human: number;
+    bot: number;
+    suspected: number;
+    humanUv: number;
+    botUv: number;
+    suspectedUv: number;
+};
+export type VisitorSummary = {
+    today: Omit<VisitorSummaryDay, "date">;
+    days: VisitorSummaryDay[];
+    paths: Array<{ path: string; pv: number; uv: number }>;
+};
+export type VisitorEvent = {
+    id: string;
+    visitorId: string;
+    userId: string | null;
+    ip: string;
+    userAgent: string;
+    device: string;
+    path: string;
+    kind: VisitorKind;
+    createdAt: string;
+};
 export type AdminPiapiAccount = { id: string; username: string; apiKeyMask: string; status: string; balanceUsd: string; usedCount: number; checkedAt: string | null; lastError: string };
 
 export type SiteSettings = {
@@ -150,4 +178,8 @@ export const adminApi = {
     deletePiapi: (ids: string[]) => apiPost<{ removed: number }>("/admin/piapi/delete", { ids }),
 
     audit: (params: { page: number; pageSize: number; action?: string }) => apiGet<Paginated<AdminAuditLog>>("/admin/audit", { params }),
+
+    visitorsSummary: () => apiGet<VisitorSummary>("/admin/visitors/summary"),
+    visitorEvents: (params: { page: number; pageSize: number; kind?: VisitorKind; path?: string; keyword?: string }) =>
+        apiGet<Paginated<VisitorEvent>>("/admin/visitors/events", { params }),
 };

@@ -1,5 +1,7 @@
-import { Body, Controller, Get, Post, Query } from "@nestjs/common";
+import { Body, Controller, Get, Post, Query, Req } from "@nestjs/common";
+import { Throttle } from "@nestjs/throttler";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
+import type { FastifyRequest } from "fastify";
 import { CurrentUser, Idempotent } from "../../common/decorators";
 import type { AuthUser } from "../../common/types";
 import { LedgerQueryDto, PaginationDto, RedeemDto } from "./dto/wallet.dto";
@@ -35,8 +37,9 @@ export class WalletController {
     @Post("redeem")
     // Idempotent because a double-tap on the redeem button must not consume two cards.
     @Idempotent("wallet.redeem")
+    @Throttle({ default: { limit: 20, ttl: 15 * 60_000 } })
     @ApiOperation({ summary: "卡密兑换余额" })
-    redeemCard(@CurrentUser() user: AuthUser, @Body() body: RedeemDto) {
-        return this.redeem.redeem({ userId: user.id, code: body.code });
+    redeemCard(@CurrentUser() user: AuthUser, @Body() body: RedeemDto, @Req() request: FastifyRequest) {
+        return this.redeem.redeem({ userId: user.id, code: body.code, ip: request.ip ?? "" });
     }
 }

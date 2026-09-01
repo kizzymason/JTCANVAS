@@ -3,6 +3,7 @@ import { Cron, CronExpression } from "@nestjs/schedule";
 import { and, eq, isNull, lt, sql } from "drizzle-orm";
 import { DB, type Database } from "../../db/db.module";
 import { files, generationTasks, idempotencyKeys, sessions } from "../../db/schema";
+import { pruneVisitorEvents } from "../visitors/visitors.service";
 import { StorageService } from "../storage/storage.service";
 import { WalletService } from "../wallet/wallet.service";
 
@@ -69,5 +70,6 @@ export class MaintenanceService {
         const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
         await this.db.delete(sessions).where(lt(sessions.expiresAt, new Date()));
         await this.db.delete(idempotencyKeys).where(and(lt(idempotencyKeys.createdAt, dayAgo), sql`${idempotencyKeys.responseBody} is not null`));
+        await pruneVisitorEvents(this.db);
     }
 }

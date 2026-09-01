@@ -15,6 +15,13 @@
       "when": 1788204110233,
       "tag": "0001_bent_selene",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788274737452,
+      "tag": "0002_nervous_carnage",
+      "breakpoints": true
     }
   ]
 }

@@ -42,6 +42,15 @@ async function bootstrap() {
     const origins = config.get<string[]>("corsOrigins") ?? [];
     if (origins.length) app.enableCors({ origin: origins, credentials: true });
 
+    app.getHttpAdapter()
+        .getInstance()
+        .addHook("onSend", async (_request: unknown, reply: { header: (name: string, value: string) => void }, payload: unknown) => {
+            reply.header("X-Content-Type-Options", "nosniff");
+            reply.header("Referrer-Policy", "strict-origin-when-cross-origin");
+            reply.header("X-Frame-Options", "SAMEORIGIN");
+            return payload;
+        });
+
     // OpenAPI is generated for the admin console only. Never mount a public /api/docs UI.
     app.get(OpenApiService).setDocument(
         SwaggerModule.createDocument(app, new DocumentBuilder().setTitle("Infinite Canvas API").setDescription("用户、余额、计费与生成接口").setVersion("1.0").addCookieAuth("ic_session").build()),

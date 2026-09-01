@@ -1,5 +1,5 @@
 import { Button, Layout, Menu } from "antd";
-import { AppWindow, ArrowLeft, BookOpen, ClipboardList, CreditCard, Database, FileClock, Gauge, KeyRound, Layers, ScrollText, Settings, Ticket, Users } from "lucide-react";
+import { AppWindow, ArrowLeft, BarChart3, BookOpen, ClipboardList, CreditCard, Database, FileClock, Gauge, KeyRound, Layers, ScrollText, Settings, Ticket, Users } from "lucide-react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
@@ -16,6 +16,7 @@ const navGroups: Array<{ titleKey: string; items: AdminNavItem[] }> = [
         titleKey: "admin.nav.groupOverview",
         items: [
             { key: "overview", path: "/admin", icon: Gauge, labelKey: "admin.nav.overview" },
+            { key: "visitors", path: "/admin/visitors", icon: BarChart3, labelKey: "admin.nav.visitors" },
             { key: "users", path: "/admin/users", icon: Users, labelKey: "admin.nav.users" },
             { key: "tasks", path: "/admin/tasks", icon: ClipboardList, labelKey: "admin.nav.tasks" },
         ],

@@ -10,7 +10,7 @@ type AuthStore = {
     site: SiteInfo;
     bootstrap: () => Promise<void>;
     login: (username: string, password: string) => Promise<void>;
-    register: (username: string, password: string) => Promise<void>;
+    register: (username: string, password: string, extra: { sliderToken: string; fingerprint: string; website?: string }) => Promise<void>;
     logout: () => Promise<void>;
     /** Refreshes the cached balance after a generation or a top-up. */
     refreshWallet: () => Promise<void>;
@@ -41,8 +41,8 @@ export const useAuthStore = create<AuthStore>()((set, get) => ({
         set({ user: result.user });
     },
 
-    register: async (username, password) => {
-        const result = await registerRequest({ username, password });
+    register: async (username, password, extra) => {
+        const result = await registerRequest({ username, password, ...extra });
         set({ user: result.user });
     },
 
