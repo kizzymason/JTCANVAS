@@ -12,7 +12,6 @@ import { SettingsService } from "../settings/settings.service";
 import { WalletService } from "../wallet/wallet.service";
 import { IP_REGISTER_WINDOW_MS, REGISTER_HOURLY_LIMIT, REGISTER_HOURLY_WINDOW_SECONDS, registrationLockError } from "./registration-policy";
 import { SessionService } from "./session.service";
-import { SliderChallengeService } from "./slider-challenge.service";
 
 /** OWASP-recommended argon2id parameters: 19 MiB, 2 iterations, 1 lane. */
 const ARGON_OPTIONS = { memoryCost: 19456, timeCost: 2, parallelism: 1 } as const;
@@ -27,11 +26,10 @@ export class AuthService {
         private readonly sessions: SessionService,
         private readonly settings: SettingsService,
         private readonly wallet: WalletService,
-        private readonly slider: SliderChallengeService,
     ) {}
 
     async register(
-        input: { username: string; password: string; sliderToken: string; fingerprint: string; website?: string },
+        input: { username: string; password: string; fingerprint: string; website?: string },
         context: { ip: string; userAgent: string },
     ) {
         if (input.website?.trim()) throw badRequest("REGISTER_REJECTED", "注册失败");
@@ -39,11 +37,13 @@ export class AuthService {
         const site = await this.settings.getSite();
         if (!site.registrationEnabled) throw forbidden("当前站点已关闭注册");
 
-        await this.slider.consume(input.sliderToken);
         await this.enforceHourlyIp(context.ip);
 
         const username = input.username.trim();
         const fingerprint = input.fingerprint.trim().toLowerCase();
+        if (!/^[a-f0-9]{64}$/.test(fingerprint) || /^0+$/.test(fingerprint)) {
+            throw badRequest("INVALID_FINGERPRINT", "注册失败，请刷新页面后重试");
+        }
         const passwordHash = await hash(input.password, ARGON_OPTIONS);
 
         const user = await this.db.transaction(async (tx) => {
@@ -132,7 +132,7 @@ export class AuthService {
         const key = `register:hour:${ip || "unknown"}`;
         const count = await this.redis.incr(key);
         if (count === 1) await this.redis.expire(key, REGISTER_HOURLY_WINDOW_SECONDS);
-        if (count > REGISTER_HOURLY_LIMIT) throw tooManyRequests("请稍后再试");
+        if (count > REGISTER_HOURLY_LIMIT) throw tooManyRequests("当前网络注册次数过多，请稍后再试");
     }
 
     private toAuthUser(user: typeof users.$inferSelect, sessionId: string): AuthUser {

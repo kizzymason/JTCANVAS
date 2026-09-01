@@ -9,7 +9,6 @@ import * as schema from "../../db/schema";
 import { registrationLocks, users, wallets } from "../../db/schema";
 import { MemoryRedis } from "../../test/memory-redis";
 import { AuthService } from "./auth.service";
-import { SliderChallengeService } from "./slider-challenge.service";
 
 const DATABASE_URL = process.env.DATABASE_URL || "postgres://infinite:infinite@127.0.0.1:5442/infinite_canvas";
 const FINGERPRINT = "ab".repeat(32);
@@ -24,29 +23,16 @@ function errorBody(error: unknown) {
     return (error as AppError).getResponse() as { code: string; message: string };
 }
 
-async function mintSliderToken() {
-    const slider = new SliderChallengeService(redis as never);
-    const { challengeId } = await slider.create();
-    const { token } = await slider.verify({
-        challengeId,
-        durationMs: 400,
-        points: [0, 0.12, 0.28, 0.41, 0.55, 0.7, 0.86, 1],
-    });
-    return token;
-}
-
 beforeAll(async () => {
     client = createPgClient(DATABASE_URL, 10);
     db = drizzle(client, { schema });
     redis = new MemoryRedis();
-    const slider = new SliderChallengeService(redis as never);
     auth = new AuthService(
         db,
         redis as never,
         { create: vi.fn(async () => "session-id") } as never,
         { getSite: async () => ({ registrationEnabled: true, newUserGiftAmount: "0" }) } as never,
         { credit: vi.fn() } as never,
-        slider,
     );
     await db.execute(sql`select 1`);
 });
@@ -73,7 +59,6 @@ describe("AuthService.register device lock", () => {
                 {
                     username: `lock_${randomUUID().slice(0, 8)}`,
                     password: "password12",
-                    sliderToken: await mintSliderToken(),
                     fingerprint: FINGERPRINT,
                 },
                 { ip: "203.0.113.10", userAgent: "Mozilla/5.0" },
@@ -83,6 +68,20 @@ describe("AuthService.register device lock", () => {
         expect(errorBody(error)).toMatchObject({ code: "DEVICE_REGISTERED", message: "该设备已注册过账号，请直接登录" });
     });
 
+    it("rejects a shared zero fingerprint instead of locking every failed client together", async () => {
+        const error = await auth
+            .register(
+                {
+                    username: `zero_${randomUUID().slice(0, 8)}`,
+                    password: "password12",
+                    fingerprint: "0".repeat(64),
+                },
+                { ip: "203.0.113.12", userAgent: "Mozilla/5.0" },
+            )
+            .catch((item) => item);
+        expect(errorBody(error)).toMatchObject({ code: "INVALID_FINGERPRINT" });
+    });
+
     it("rejects a honeypot submission without creating a user", async () => {
         const username = `hp_${randomUUID().slice(0, 8)}`;
         const error = await auth
@@ -90,7 +89,6 @@ describe("AuthService.register device lock", () => {
                 {
                     username,
                     password: "password12",
-                    sliderToken: "unused-token-value",
                     fingerprint: FINGERPRINT,
                     website: "http://spam.test",
                 },

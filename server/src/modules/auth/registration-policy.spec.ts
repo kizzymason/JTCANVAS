@@ -30,7 +30,7 @@ describe("registrationLockError", () => {
     it("caps successful registrations per IP at 5 in 24 hours", () => {
         expect(registrationLockError({ isFirstUser: false, lockRegisteredAt: null, ipSuccessCount: 5 })).toMatchObject({
             code: "TOO_MANY_REQUESTS",
-            message: "请稍后再试",
+            message: "当前网络注册次数过多，请稍后再试",
         });
     });
 });

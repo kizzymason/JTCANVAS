@@ -10,7 +10,7 @@ type AuthStore = {
     site: SiteInfo;
     bootstrap: () => Promise<void>;
     login: (username: string, password: string) => Promise<void>;
-    register: (username: string, password: string, extra: { sliderToken: string; fingerprint: string; website?: string }) => Promise<void>;
+    register: (username: string, password: string, extra: { fingerprint: string; website?: string }) => Promise<void>;
     logout: () => Promise<void>;
     /** Refreshes the cached balance after a generation or a top-up. */
     refreshWallet: () => Promise<void>;

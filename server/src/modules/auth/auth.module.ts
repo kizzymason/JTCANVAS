@@ -4,7 +4,6 @@ import { WalletModule } from "../wallet/wallet.module";
 import { AuthController } from "./auth.controller";
 import { AuthService } from "./auth.service";
 import { SessionService } from "./session.service";
-import { SliderChallengeService } from "./slider-challenge.service";
 
 /**
  * Global because AuthGuard is registered application-wide and needs SessionService.
@@ -13,7 +12,7 @@ import { SliderChallengeService } from "./slider-challenge.service";
 @Module({
     imports: [WalletModule, VisitorsModule],
     controllers: [AuthController],
-    providers: [AuthService, SessionService, SliderChallengeService],
+    providers: [AuthService, SessionService],
     exports: [AuthService, SessionService],
 })
 export class AuthModule {}
