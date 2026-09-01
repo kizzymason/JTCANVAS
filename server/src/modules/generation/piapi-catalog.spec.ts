@@ -27,14 +27,14 @@ describe("PiAPI catalog prices", () => {
         expect(pro.resolutions).toEqual(["1K", "2K"]);
         expect(pro.maxCount).toBe(1);
         expect(pro.supportsTransparent).toBe(false);
-        expect(pro.aspectPresets.find((item) => item.ratio === "16:9")?.sizes["1K"]).toBe("1312x736");
-        expect(pro.aspectPresets.find((item) => item.ratio === "9:16")?.sizes["2K"]).toBe("1440x2560");
+        expect(pro.aspectPresets.find((item) => item.ratio === "16:9")?.sizes["1K"]).toBe("1424x800");
+        expect(pro.aspectPresets.find((item) => item.ratio === "9:16")?.sizes["2K"]).toBe("1584x2816");
 
         const lite = piapiSeedFeatures(PIAPI_SEEDREAM_MODELS.find((item) => item.name === "seedream-5-lite")!);
         expect(lite.resolutions).toEqual(["2K", "4K"]);
         expect(lite.maxCount).toBe(1);
-        expect(lite.aspectPresets.find((item) => item.ratio === "16:9")?.sizes["2K"]).toBe("2848x1600");
-        expect(lite.aspectPresets.find((item) => item.ratio === "16:9")?.sizes["4K"]).toBe("4096x2304");
+        expect(lite.aspectPresets.find((item) => item.ratio === "16:9")?.sizes["2K"]).toBe("2816x1584");
+        expect(lite.aspectPresets.find((item) => item.ratio === "16:9")?.sizes["4K"]).toBe("5504x3040");
     });
 
     it("locks the catalog as soon as any PiAPI model exists so restarts cannot recreate deleted presets", () => {

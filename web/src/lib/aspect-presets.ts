@@ -39,28 +39,10 @@ export const DEFAULT_ASPECT_1K: Record<string, readonly [number, number]> = Obje
 export const DEFAULT_ASPECT_RATIO_ORDER = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "4:5", "5:4", "21:9", "9:21", "2:1", "1:2", "3:1", "1:3"] as const;
 
 /**
- * PiAPI Pro encodes ratio into upstream pixels. Documented 16:9 is 1312x736 at 1K and 2560x1440 at 2K
- * (1312×2 is 2624, not 2560). Other ratios fall back to the ByteDance Pro table.
+ * PiAPI Seedream accepts this ratio subset. Pixel sizes match official Seedream (not the
+ * older PiAPI 16:9 1312x736 table). Lite still bills UI 4K as upstream 3K.
  */
 export const PIAPI_ASPECT_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "4:5", "5:4", "21:9"] as const;
-export const PIAPI_PRO_ASPECT_OVERRIDES: Record<string, Partial<Record<ImageResolutionTier, readonly [number, number]>>> = {
-    "16:9": { "1K": [1312, 736], "2K": [2560, 1440] },
-    "9:16": { "1K": [736, 1312], "2K": [1440, 2560] },
-};
-
-/** Seedream 5 Lite 2K + 3K (shown as 4K in our UI because PiAPI Lite has no 4K). */
-const PIAPI_LITE_ASPECT_SIZES: Record<string, SizeTriple> = {
-    "1:1": { "1K": [1024, 1024], "2K": [2048, 2048], "4K": [3072, 3072] },
-    "16:9": { "1K": [1424, 800], "2K": [2848, 1600], "4K": [4096, 2304] },
-    "9:16": { "1K": [800, 1424], "2K": [1600, 2848], "4K": [2304, 4096] },
-    "4:3": { "1K": [1152, 864], "2K": [2304, 1728], "4K": [3456, 2592] },
-    "3:4": { "1K": [864, 1152], "2K": [1728, 2304], "4K": [2592, 3456] },
-    "3:2": { "1K": [1248, 832], "2K": [2496, 1664], "4K": [3744, 2496] },
-    "2:3": { "1K": [832, 1248], "2K": [1664, 2496], "4K": [2496, 3744] },
-    "4:5": { "1K": [896, 1120], "2K": [1832, 2288], "4K": [2752, 3440] },
-    "5:4": { "1K": [1120, 896], "2K": [2288, 1832], "4K": [3440, 2752] },
-    "21:9": { "1K": [1568, 672], "2K": [3136, 1344], "4K": [4704, 2016] },
-};
 
 export const DEFAULT_VIDEO_ASPECT_RATIO_ORDER = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "21:9"] as const;
 const VIDEO_ASPECT_SIZES: Record<string, SizeTriple> = {
@@ -117,9 +99,8 @@ export function defaultAspectPresets(): AspectPreset[] {
     ];
 }
 
-export function piapiAspectPresets(kind: "pro" | "lite" = "pro"): AspectPreset[] {
-    if (kind === "lite") return presetsFromSizeTable(PIAPI_ASPECT_RATIOS, PIAPI_LITE_ASPECT_SIZES);
-    return presetsFromSizeTable(PIAPI_ASPECT_RATIOS, DEFAULT_ASPECT_SIZES, PIAPI_PRO_ASPECT_OVERRIDES);
+export function piapiAspectPresets(_kind: "pro" | "lite" = "pro"): AspectPreset[] {
+    return presetsFromSizeTable(PIAPI_ASPECT_RATIOS, DEFAULT_ASPECT_SIZES);
 }
 
 export function defaultVideoAspectPresets(): AspectPreset[] {
@@ -173,7 +154,7 @@ export function tierFromPixelSize(width: number, height: number, presets: Aspect
 /** Fill missing tiers from the native ratio table. Only unknown custom 1K rows fall back to ×2/×4. */
 export function completePresetSizes(sizes: Partial<Record<ImageResolutionTier, string>>, ratio?: string) {
     const next: Partial<Record<ImageResolutionTier, string>> = { ...sizes };
-    const catalog = ratio && ratio.toLowerCase() !== "auto" ? catalogSizesForRatio(ratio, next) : {};
+    const catalog = ratio && ratio.toLowerCase() !== "auto" ? defaultSizesForRatio(ratio) : {};
     for (const tier of IMAGE_RESOLUTION_TIERS) {
         if (!next[tier] && catalog[tier]) next[tier] = catalog[tier]!;
     }
@@ -190,31 +171,6 @@ export function presetSizeForQuality(preset: AspectPreset, quality: string | und
     const sizes = completePresetSizes(preset.sizes, preset.ratio);
     const tier = qualityToResolutionTier(quality) ?? "1K";
     return sizes[tier] || sizes["1K"];
-}
-
-function catalogSizesForRatio(ratio: string, existing: Partial<Record<ImageResolutionTier, string>>): Partial<Record<ImageResolutionTier, string>> {
-    const fromDefault = defaultSizesForRatio(ratio);
-    const over = PIAPI_PRO_ASPECT_OVERRIDES[ratio];
-    const existing1K = existing["1K"];
-    if (existing1K && over?.["1K"] && existing1K === formatPixelSize(over["1K"][0], over["1K"][1])) {
-        return {
-            ...fromDefault,
-            "1K": existing1K,
-            ...(over["2K"] ? { "2K": formatPixelSize(over["2K"][0], over["2K"][1]) } : {}),
-        };
-    }
-    const lite = PIAPI_LITE_ASPECT_SIZES[ratio];
-    if (existing["2K"] && lite) {
-        const lite2K = formatPixelSize(lite["2K"][0], lite["2K"][1]);
-        if (existing["2K"] === lite2K) {
-            return {
-                "1K": formatPixelSize(lite["1K"][0], lite["1K"][1]),
-                "2K": lite2K,
-                "4K": formatPixelSize(lite["4K"][0], lite["4K"][1]),
-            };
-        }
-    }
-    return fromDefault;
 }
 
 /**

@@ -18,18 +18,14 @@ describe("aspect presets", () => {
         expect(presets.map((item) => item.ratio)).toEqual(["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "4:5", "5:4", "21:9", "9:21", "2:1", "1:2", "3:1", "1:3", "auto"]);
     });
 
-    it("uses PiAPI Pro's documented 16:9 1K/2K which is not 2× of 1K", () => {
-        const presets = piapiAspectPresets("pro");
-        expect(presets.find((item) => item.ratio === "16:9")?.sizes).toEqual({ "1K": "1312x736", "2K": "2560x1440", "4K": "5504x3040" });
-        expect(presets.find((item) => item.ratio === "9:16")?.sizes["1K"]).toBe("736x1312");
-        expect(presets.find((item) => item.ratio === "9:16")?.sizes["2K"]).toBe("1440x2560");
-        expect(presets.map((item) => item.ratio)).toEqual(["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "4:5", "5:4", "21:9", "auto"]);
-    });
-
-    it("uses Lite 2K plus 3K-as-4K for PiAPI Lite", () => {
-        const presets = piapiAspectPresets("lite");
-        expect(presets.find((item) => item.ratio === "16:9")?.sizes).toEqual({ "1K": "1424x800", "2K": "2848x1600", "4K": "4096x2304" });
-        expect(presets.find((item) => item.ratio === "1:1")?.sizes["4K"]).toBe("3072x3072");
+    it("uses official Seedream pixels for PiAPI Pro and Lite", () => {
+        for (const kind of ["pro", "lite"] as const) {
+            const presets = piapiAspectPresets(kind);
+            expect(presets.find((item) => item.ratio === "16:9")?.sizes).toEqual({ "1K": "1424x800", "2K": "2816x1584", "4K": "5504x3040" });
+            expect(presets.find((item) => item.ratio === "9:16")?.sizes["1K"]).toBe("800x1424");
+            expect(presets.find((item) => item.ratio === "4:3")?.sizes["2K"]).toBe("2368x1776");
+            expect(presets.map((item) => item.ratio)).toEqual(["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "4:5", "5:4", "21:9", "auto"]);
+        }
     });
 
     it("keeps video presets on 1280x720 rather than Seedream image pixels", () => {
@@ -61,7 +57,7 @@ describe("aspect presets", () => {
 
     it("fills blank 2K/4K from the native API table instead of doubling 1K", () => {
         expect(completePresetSizes({ "1K": "1424x800" }, "16:9")).toEqual({ "1K": "1424x800", "2K": "2816x1584", "4K": "5504x3040" });
-        expect(completePresetSizes({ "1K": "1312x736" }, "16:9")["2K"]).toBe("2560x1440");
+        expect(completePresetSizes({ "1K": "1312x736" }, "16:9")["2K"]).toBe("2816x1584");
         expect(completePresetSizes({ "1K": "1152x864" }, "4:3")["2K"]).toBe("2368x1776");
         expect(completePresetSizes({ "1K": "900x600" })["2K"]).toBe("1800x1200");
     });

@@ -555,7 +555,7 @@ export default {
             aspectRatiosHint: "Only checked ratios appear in settings; auto lets the model decide",
             aspectRatiosRequired: "Select at least one aspect ratio",
             aspectPresets: "Aspect presets",
-            aspectPresetsHint: "Configured per model. Default pixels follow Seedream native sizes (16:9 is 1424x800 at 1K and 2816x1584 at 2K, not a linear 2×). PiAPI Pro 16:9 is 1312x736 / 2560x1440. Blank 2K / 4K fill from that ratio's native table. Billing always follows the selected 1K/2K/4K tier, not the longest edge.",
+            aspectPresetsHint: "Configured per model. Default pixels follow Seedream native sizes (16:9 is 1424x800 at 1K and 2816x1584 at 2K, not a linear 2×). PiAPI Seedream uses the same official pixels. Blank 2K / 4K fill from that ratio's native table. Billing always follows the selected 1K/2K/4K tier, not the longest edge.",
             aspectPresetsRequired: "Keep at least one aspect ratio",
             aspectPresetRatio: "Ratio",
             aspectPresetLabel: "Label",
