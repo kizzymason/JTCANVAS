@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 
 import i18n from "@/i18n";
 import { type CanvasTheme } from "@/lib/canvas-theme";
+import { defaultAspectPresets, parsePixelSize, presetSizeForQuality } from "@/lib/aspect-presets";
 import { migrateLegacyImageSize, modelFeaturesOf, normalizeImageResolution } from "@/lib/model-features";
 import type { AiConfig } from "@/stores/use-config-store";
 import { normalizeModelOptionValue } from "@/stores/use-config-store";
@@ -11,24 +12,13 @@ import { useModelStore } from "@/stores/use-model-store";
 
 const DIMENSION_STEP = 16;
 
-const aspectOptions = [
-    { value: "1:1", label: "1:1", width: 1024, height: 1024, icon: "square" },
-    { value: "3:2", label: "3:2", width: 1536, height: 1024, icon: "landscape" },
-    { value: "2:3", label: "2:3", width: 1024, height: 1536, icon: "portrait" },
-    { value: "4:3", label: "4:3", width: 1360, height: 1024, icon: "landscape" },
-    { value: "3:4", label: "3:4", width: 1024, height: 1360, icon: "portrait" },
-    { value: "16:9", label: "16:9", width: 1824, height: 1024, icon: "landscape" },
-    { value: "9:16", label: "9:16", width: 1024, height: 1824, icon: "portrait" },
-    { value: "auto", label: "auto", width: 0, height: 0, icon: "auto" },
-] as const;
-
 export const imageQualityOptions = [
     { value: "auto", get label() { return i18n.t("settingsPanels.common.auto"); } },
     { value: "1K", label: "1K" },
     { value: "2K", label: "2K" },
     { value: "4K", label: "4K" },
 ];
-export const imageAspectOptions = aspectOptions.map((item) => ({ value: item.value, label: item.label }));
+export const imageAspectOptions = defaultAspectPresets().map((item) => ({ value: item.ratio, label: item.label }));
 
 type ImageSettingsPanelProps = {
     config: AiConfig;
@@ -58,9 +48,10 @@ export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = 
     const migratedSize = migrateLegacyImageSize(config.size || "auto");
     const activeSize = migratedSize.size || "auto";
     const transparentBackground = config.background === "transparent";
-    const visibleAspects = aspectOptions.filter((item) => features.aspectRatios.includes(item.value));
-    const selectedAspect = visibleAspects.find((item) => item.value === activeSize);
-    const dimensions = readSizeDimensions(activeSize, selectedAspect || aspectOptions[0]);
+    const visibleAspects = features.aspectPresets;
+    const selectedAspect = visibleAspects.find((item) => item.ratio === activeSize);
+    const qualityForPixels = resolution === "auto" ? "1K" : resolution;
+    const dimensions = readSizeDimensions(activeSize, selectedAspect ? parsePixelSize(presetSizeForQuality(selectedAspect, qualityForPixels) || "") : { width: 1024, height: 1024 });
     const resolutionOptions = [{ value: "auto" as const }, ...features.resolutions.map((value) => ({ value }))];
     const countOptions = Array.from({ length: maxCount }, (_, index) => {
         const value = index + 1;
@@ -150,19 +141,27 @@ export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = 
                 <div className="space-y-2.5">
                     <SettingTitle color={theme.node.muted}>{t("settingsPanels.image.aspectRatio")}</SettingTitle>
                     <div className="grid grid-cols-4 gap-2.5">
-                        {visibleAspects.map((item) => (
+                        {visibleAspects.map((item) => {
+                            const preview = parsePixelSize(presetSizeForQuality(item, qualityForPixels) || "") || { width: 0, height: 0 };
+                            return (
                             <button
-                                key={item.value}
+                                key={item.ratio}
                                 type="button"
-                                className="flex h-[72px] cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border bg-transparent text-sm transition hover:opacity-80"
-                                style={{ borderColor: selectedAspect?.value === item.value ? theme.node.text : theme.node.stroke, background: "transparent", color: theme.node.text }}
+                                className="flex h-[78px] cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border bg-transparent text-sm transition hover:opacity-80"
+                                style={{ borderColor: selectedAspect?.ratio === item.ratio ? theme.node.text : theme.node.stroke, background: "transparent", color: theme.node.text }}
                                 onMouseDown={(event) => event.stopPropagation()}
-                                onClick={() => selectAspect(item.value)}
+                                onClick={() => selectAspect(item.ratio)}
                             >
-                                <AspectIcon type={item.icon} width={item.width} height={item.height} color={theme.node.text} />
-                                <span>{item.label}</span>
+                                <AspectIcon type={item.ratio === "auto" ? "auto" : "box"} width={preview.width} height={preview.height} color={theme.node.text} />
+                                <span>{item.label || item.ratio}</span>
+                                {item.ratio === "auto" || !preview.width ? null : (
+                                    <span className="text-[11px] leading-none opacity-55">
+                                        {preview.width}x{preview.height}
+                                    </span>
+                                )}
                             </button>
-                        ))}
+                            );
+                        })}
                     </div>
                 </div>
                 {features.supportsTransparent ? (
@@ -222,7 +221,8 @@ export function imageQualityLabel(value: string) {
 
 export function imageSizeLabel(size: string) {
     const migrated = migrateLegacyImageSize(size);
-    return aspectOptions.find((item) => item.value === migrated.size)?.label || migrated.size;
+    const preset = defaultAspectPresets().find((item) => item.ratio === migrated.size);
+    return preset?.label || migrated.size;
 }
 
 function OptionPill({ selected, theme, onClick, children }: { selected: boolean; theme: CanvasTheme; onClick: () => void; children: ReactNode }) {
@@ -288,11 +288,11 @@ function SettingTitle({ children, color }: { children: string; color: string }) 
     );
 }
 
-function readSizeDimensions(size: string, fallback: { width: number; height: number }) {
+function readSizeDimensions(size: string, fallback: { width: number; height: number } | null) {
     const match = size?.match(/^(\d+)x(\d+)$/);
     return {
-        width: match ? Number(match[1]) : fallback.width,
-        height: match ? Number(match[2]) : fallback.height,
+        width: match ? Number(match[1]) : fallback?.width || 0,
+        height: match ? Number(match[2]) : fallback?.height || 0,
     };
 }
 

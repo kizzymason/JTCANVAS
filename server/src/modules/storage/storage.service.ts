@@ -9,6 +9,7 @@ import { badRequest, notFound } from "../../common/errors";
 import { CryptoService } from "../crypto/crypto.service";
 import { SettingsService, type StorageSettings } from "../settings/settings.service";
 import { buildObjectPath, LocalStorageDriver } from "./local.driver";
+import { isPublicHttpUrl, publicFileAbsoluteUrl, publicFileToken, assertPublicFileToken } from "./public-file-url";
 import { S3StorageDriver } from "./s3.driver";
 import type { DownloadTarget, StorageDriver } from "./storage.driver";
 
@@ -79,6 +80,25 @@ export class StorageService implements OnApplicationShutdown {
             .where(and(eq(files.storageKey, storageKey), eq(files.ownerId, ownerId), isNull(files.deletedAt)))
             .limit(1);
         return row ?? null;
+    }
+
+    /** Token-gated lookup used when PiAPI fetches a short-lived public file URL. */
+    async findByStorageKeyPublic(storageKey: string) {
+        const [row] = await this.db.select().from(files).where(and(eq(files.storageKey, storageKey), isNull(files.deletedAt))).limit(1);
+        return row ?? null;
+    }
+
+    /** Absolute https URL PiAPI can GET, or undefined when APP_PUBLIC_URL is missing/local. */
+    signedPublicUrl(storageKey: string) {
+        const publicBase = this.config.get<string>("publicUrl") || "";
+        if (!isPublicHttpUrl(publicBase)) return undefined;
+        const ttl = this.config.get<number>("storage.signedUrlTtlSeconds")!;
+        const token = publicFileToken((message) => this.crypto.hmac(message), storageKey, Math.floor(Date.now() / 1000) + ttl);
+        return publicFileAbsoluteUrl(publicBase, storageKey, token);
+    }
+
+    verifyPublicFileToken(storageKey: string, token: string) {
+        assertPublicFileToken((message) => this.crypto.hmac(message), storageKey, token);
     }
 
     async findById(ownerId: string, id: string) {

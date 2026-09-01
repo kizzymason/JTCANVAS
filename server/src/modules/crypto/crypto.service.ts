@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, randomBytes, timingSafeEqual } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 
@@ -29,6 +29,11 @@ export class CryptoService {
 
     get currentKeyId() {
         return this.activeKeyId;
+    }
+
+    /** HMAC-SHA256 over a capability string, e.g. short-lived public file tokens. */
+    hmac(message: string) {
+        return createHmac("sha256", this.key(this.activeKeyId)).update(message).digest("base64url");
     }
 
     encrypt(plaintext: string): { cipher: string; keyId: string } {

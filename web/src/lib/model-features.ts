@@ -1,9 +1,10 @@
 import type { PublicModel } from "@/services/api/models";
+import { defaultAspectPresets, parseAspectPresets, type AspectPreset } from "@/lib/aspect-presets";
 
 export const IMAGE_RESOLUTIONS = ["1K", "2K", "4K"] as const;
 export type ImageResolution = (typeof IMAGE_RESOLUTIONS)[number];
 
-export const IMAGE_ASPECT_RATIOS = ["1:1", "3:2", "2:3", "4:3", "3:4", "16:9", "9:16", "auto"] as const;
+export const IMAGE_ASPECT_RATIOS = defaultAspectPresets().map((item) => item.ratio);
 export const DEFAULT_MAX_COUNT = 15;
 export const DEFAULT_VIDEO_RESOLUTIONS = ["480", "720"];
 export const DEFAULT_MAX_SECONDS = 20;
@@ -13,6 +14,7 @@ export type ModelFeatures = {
     maxCount: number;
     supportsTransparent: boolean;
     aspectRatios: string[];
+    aspectPresets: AspectPreset[];
     videoResolutions: string[];
     maxSeconds: number;
 };
@@ -21,7 +23,8 @@ export const DEFAULT_MODEL_FEATURES: ModelFeatures = {
     resolutions: [...IMAGE_RESOLUTIONS],
     maxCount: DEFAULT_MAX_COUNT,
     supportsTransparent: false,
-    aspectRatios: [...IMAGE_ASPECT_RATIOS],
+    aspectPresets: defaultAspectPresets(),
+    aspectRatios: IMAGE_ASPECT_RATIOS,
     videoResolutions: [...DEFAULT_VIDEO_RESOLUTIONS],
     maxSeconds: DEFAULT_MAX_SECONDS,
 };
@@ -29,11 +32,13 @@ export const DEFAULT_MODEL_FEATURES: ModelFeatures = {
 export function modelFeaturesOf(model: PublicModel | undefined): ModelFeatures {
     const raw = model?.features;
     if (!raw) return DEFAULT_MODEL_FEATURES;
+    const aspectPresets = parseAspectPresets(raw.aspectPresets, raw.aspectRatios);
     return {
         resolutions: pickResolutions(raw.resolutions),
         maxCount: clampInt(raw.maxCount, 1, DEFAULT_MAX_COUNT, DEFAULT_MAX_COUNT),
         supportsTransparent: Boolean(raw.supportsTransparent),
-        aspectRatios: pickList(raw.aspectRatios, IMAGE_ASPECT_RATIOS, DEFAULT_MODEL_FEATURES.aspectRatios),
+        aspectPresets,
+        aspectRatios: aspectPresets.map((item) => item.ratio),
         videoResolutions: pickVideoResolutions(raw.videoResolutions),
         maxSeconds: clampInt(raw.maxSeconds, 1, 600, DEFAULT_MAX_SECONDS),
     };
@@ -52,7 +57,7 @@ export function normalizeImageResolution(quality: string | undefined): ImageReso
 /** Old aspect buttons encoded 2K/4K into the size value; split those back out. */
 export function migrateLegacyImageSize(size: string): { size: string; qualityHint?: ImageResolution } {
     const value = (size ?? "").trim();
-    const tagged = value.match(/^(1:1|3:2|2:3|4:3|3:4|16:9|9:16|auto)-(2k|4k)$/i);
+    const tagged = value.match(/^(\d+:\d+|auto)-(2k|4k)$/i);
     if (tagged) return { size: tagged[1], qualityHint: tagged[2].toLowerCase() === "4k" ? "4K" : "2K" };
     return { size: value || "auto" };
 }
@@ -60,12 +65,6 @@ export function migrateLegacyImageSize(size: string): { size: string; qualityHin
 function pickResolutions(values: string[] | undefined): ImageResolution[] {
     const next = (values ?? []).filter((item): item is ImageResolution => IMAGE_RESOLUTIONS.includes(item as ImageResolution));
     return next.length ? [...new Set(next)] : [...IMAGE_RESOLUTIONS];
-}
-
-function pickList(values: string[] | undefined, allowed: readonly string[], fallback: string[]) {
-    const allowedSet = new Set(allowed);
-    const next = [...new Set((values ?? []).map((item) => String(item).trim()).filter((item) => allowedSet.has(item)))];
-    return next.length ? next : fallback;
 }
 
 function pickVideoResolutions(values: string[] | undefined) {

@@ -1,4 +1,5 @@
 import type { Capability } from "../../pricing/pricing.types";
+import type { AspectPreset } from "../../pricing/aspect-presets";
 
 /** A reference image already resolved to bytes by the worker. */
 export type ReferenceInput = {
@@ -6,6 +7,8 @@ export type ReferenceInput = {
     mimeType: string;
     fileName: string;
     body: Buffer;
+    /** Public http(s) URL Seedream can fetch. Empty-body passthrough refs only carry this. */
+    publicUrl?: string;
 };
 
 export type GenerationRequest = {
@@ -22,6 +25,8 @@ export type GenerationRequest = {
     size?: string;
     quality?: string;
     background?: string;
+    /** Per-model 1K/2K/4K pixel table used to turn a ratio into an explicit size. */
+    aspectPresets?: AspectPreset[];
     seconds?: number;
     resolution?: string;
     generateAudio?: boolean;

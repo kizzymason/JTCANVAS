@@ -2,9 +2,9 @@ import type { NavigateFunction } from "react-router-dom";
 
 import i18n from "@/i18n";
 import { uploadImage } from "@/services/image-storage";
-import { imageAspectOptions, imageQualityOptions } from "@/components/image-settings-panel";
+import { imageQualityOptions } from "@/components/image-settings-panel";
 import { modelFeaturesOf } from "@/lib/model-features";
-import { videoSecondOptions, videoSizeOptions } from "@/components/video-settings-panel";
+import { videoSecondOptions } from "@/components/video-settings-panel";
 import type { CanvasAgentSnapshot } from "@/lib/canvas/canvas-agent-ops";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { useAssetStore } from "@/stores/use-asset-store";
@@ -163,7 +163,7 @@ function getImageConfig() {
         current: { model, modelName: modelOptionName(model), quality: config.quality || "auto", size: config.size || "1:1", count: config.count || "1" },
         models: selectableModelsByCapability(config, "image").map((value) => ({ value, label: modelOptionLabel(value) })),
         qualityOptions: imageQualityOptions.filter((item) => item.value === "auto" || features.resolutions.includes(item.value as "1K" | "2K" | "4K")),
-        sizeOptions: imageAspectOptions.filter((item) => features.aspectRatios.includes(item.value)),
+        sizeOptions: features.aspectPresets.map((item) => ({ value: item.ratio, label: item.label || item.ratio })),
         countRange: { min: 1, max: features.maxCount },
     };
 }
@@ -205,14 +205,14 @@ function getVideoConfig() {
         current: {
             model,
             modelName: modelOptionName(model),
-            size: config.size || "1280x720",
+            size: config.size || "16:9",
             seconds: config.videoSeconds || "6",
             resolution: config.vquality || "720",
             generateAudio: config.videoGenerateAudio !== "false",
             watermark: config.videoWatermark === "true",
         },
         models: selectableModelsByCapability(config, "video").map((value) => ({ value, label: modelOptionLabel(value) })),
-        sizeOptions: videoSizeOptions,
+        sizeOptions: features.aspectPresets.map((item) => ({ value: item.ratio, label: item.label || item.ratio })),
         secondsOptions: videoSecondOptions.filter((value) => Number(value) <= features.maxSeconds),
         resolutionOptions: features.videoResolutions.map((value) => ({ value, label: `${value}p` })),
         maxSeconds: features.maxSeconds,

@@ -13,6 +13,7 @@ import { decodeModelValue } from "../pricing/pricing.types";
 import { SettingsService } from "../settings/settings.service";
 import { assertGenerationEnabled } from "../settings/site-services";
 import { StorageService } from "../storage/storage.service";
+import { isPublicHttpUrl } from "../storage/public-file-url";
 import { WalletService } from "../wallet/wallet.service";
 import { GENERATION_QUEUE, type GenerationJobData } from "./generation.queue";
 import { pricingSpec } from "./image-size";
@@ -73,12 +74,12 @@ export class GenerationService {
                 background: input.background,
             });
         } else if (input.capability === "video") {
-            assertVideoGenerationFeatures(publicModel.features, { seconds: input.seconds, resolution: input.resolution });
+            assertVideoGenerationFeatures(publicModel.features, { seconds: input.seconds, resolution: input.resolution, size: input.size });
         }
 
         const spec =
             input.capability === "image"
-                ? pricingSpec(input.quality, input.size)
+                ? pricingSpec(input.quality, input.size, publicModel.features.aspectPresets)
                 : input.capability === "video"
                   ? videoPricingSpec(input.resolution, references.some((item) => isVideoMime(item.mimeType)))
                   : undefined;
@@ -229,7 +230,12 @@ export class GenerationService {
     private async resolveReferences(userId: string, input: CreateGenerationDto) {
         const keys = [...(input.references ?? []), ...(input.mask ? [input.mask] : [])];
         if (!keys.length) return [];
-        const resolved = await Promise.all(keys.map((key) => this.storage.findByStorageKey(userId, key)));
+        const resolved = await Promise.all(
+            keys.map(async (key) => {
+                if (isPublicHttpUrl(key)) return { storageKey: key, mimeType: mimeFromUrl(key) };
+                return this.storage.findByStorageKey(userId, key);
+            }),
+        );
         const missing = keys.filter((_key, index) => !resolved[index]);
         if (missing.length) throw badRequest("REFERENCE_NOT_FOUND", `参考图不存在或不属于当前账号：${missing.join(", ")}`);
         return (input.references ?? []).map((key, index) => ({ storageKey: key, mimeType: resolved[index]?.mimeType ?? "" }));
@@ -254,4 +260,12 @@ export class GenerationService {
             finishedAt: task.finishedAt,
         };
     }
+}
+
+function mimeFromUrl(url: string) {
+    const pathname = url.split("?")[0]?.toLowerCase() ?? "";
+    if (pathname.endsWith(".jpg") || pathname.endsWith(".jpeg")) return "image/jpeg";
+    if (pathname.endsWith(".webp")) return "image/webp";
+    if (pathname.endsWith(".mp4") || pathname.endsWith(".webm")) return "video/mp4";
+    return "image/png";
 }

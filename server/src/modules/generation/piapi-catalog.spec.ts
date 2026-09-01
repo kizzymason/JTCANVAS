@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { piapiSeedFeatures, piapiSeedPriceRows, PIAPI_SEEDREAM_MODELS, usdToCny } from "./piapi-catalog";
+import { piapiSeedFeatures, piapiSeedPriceRows, PIAPI_SEEDREAM_MODELS, shouldWritePiapiPresetCatalog, usdToCny } from "./piapi-catalog";
 
 describe("PiAPI catalog prices", () => {
     it("converts published USD list prices to CNY strings at 7.2 without using Number", () => {
@@ -31,5 +31,11 @@ describe("PiAPI catalog prices", () => {
         const lite = piapiSeedFeatures(PIAPI_SEEDREAM_MODELS.find((item) => item.name === "seedream-5-lite")!);
         expect(lite.resolutions).toEqual(["2K", "4K"]);
         expect(lite.maxCount).toBe(1);
+    });
+
+    it("locks the catalog as soon as any PiAPI model exists so restarts cannot recreate deleted presets", () => {
+        expect(shouldWritePiapiPresetCatalog(0)).toBe(true);
+        expect(shouldWritePiapiPresetCatalog(1)).toBe(false);
+        expect(shouldWritePiapiPresetCatalog(2)).toBe(false);
     });
 });

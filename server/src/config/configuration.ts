@@ -26,6 +26,11 @@ export function configuration() {
         trustProxy: bool(process.env.TRUST_PROXY, true),
         corsOrigins: list(process.env.CORS_ORIGINS),
         logLevel: process.env.LOG_LEVEL || "info",
+        /**
+         * Public origin PiAPI can fetch, e.g. https://jingtiang.com.
+         * Used to mint short-lived file URLs when the PiAPI ephemeral host is plan-gated.
+         */
+        publicUrl: (process.env.APP_PUBLIC_URL || "").replace(/\/$/, ""),
 
         database: {
             url: process.env.DATABASE_URL!,

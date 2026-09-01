@@ -1,8 +1,7 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 import type { Database } from "../../db/db.module";
 import { channelModels, channels, modelPrices } from "../../db/schema";
-import { isEmptyFeatures } from "../pricing/model-features";
-import { PIAPI_BASE_URL, PIAPI_SEEDREAM_MODELS, piapiSeedFeatures, piapiSeedPriceRows } from "./piapi-catalog";
+import { PIAPI_BASE_URL, PIAPI_SEEDREAM_MODELS, piapiSeedFeatures, piapiSeedPriceRows, shouldWritePiapiPresetCatalog } from "./piapi-catalog";
 
 export type PiapiChannelSeedResult = {
     id: string;
@@ -13,8 +12,10 @@ export type PiapiChannelSeedResult = {
 };
 
 /**
- * Idempotent: one PiAPI channel, four Seedream image models, and missing price rows only.
- * Existing unit prices are left alone so an admin tweak survives a restart.
+ * Ensures one PiAPI channel exists.
+ * The four Seedream presets are written only when no PiAPI channel has any models yet.
+ * After an admin has added, renamed, repriced or deleted models, restarts must not
+ * recreate presets or mutate display names, features or prices.
  */
 export async function seedPiapiChannel(db: Database): Promise<PiapiChannelSeedResult> {
     return db.transaction(async (tx) => {
@@ -38,43 +39,35 @@ export async function seedPiapiChannel(db: Database): Promise<PiapiChannelSeedRe
             created = true;
         }
 
+        const [owned] = await tx
+            .select({ id: channelModels.id })
+            .from(channelModels)
+            .innerJoin(channels, eq(channelModels.channelId, channels.id))
+            .where(eq(channels.apiFormat, "piapi"))
+            .limit(1);
+
+        if (!shouldWritePiapiPresetCatalog(owned ? 1 : 0)) {
+            return { id: channel.id, name: channel.name, created, modelsCreated: 0, pricesInserted: 0 };
+        }
+
         let modelsCreated = 0;
         let pricesInserted = 0;
 
         for (const spec of PIAPI_SEEDREAM_MODELS) {
-            let [model] = await tx
-                .select()
-                .from(channelModels)
-                .where(and(eq(channelModels.channelId, channel.id), eq(channelModels.name, spec.name)))
-                .limit(1);
-
-            if (!model) {
-                [model] = await tx
-                    .insert(channelModels)
-                    .values({
-                        channelId: channel.id,
-                        name: spec.name,
-                        displayName: spec.displayName,
-                        capability: "image",
-                        enabled: true,
-                        features: piapiSeedFeatures(spec),
-                    })
-                    .returning();
-                modelsCreated += 1;
-            } else if (isEmptyFeatures(model.features)) {
-                [model] = await tx
-                    .update(channelModels)
-                    .set({ features: piapiSeedFeatures(spec), updatedAt: new Date() })
-                    .where(eq(channelModels.id, model.id))
-                    .returning();
-            }
-
-            const existing = await tx.select({ spec: modelPrices.spec }).from(modelPrices).where(eq(modelPrices.channelModelId, model.id));
-            const have = new Set(existing.map((row) => row.spec ?? ""));
+            const [model] = await tx
+                .insert(channelModels)
+                .values({
+                    channelId: channel.id,
+                    name: spec.name,
+                    displayName: spec.displayName,
+                    capability: "image",
+                    enabled: true,
+                    features: piapiSeedFeatures(spec),
+                })
+                .returning();
+            modelsCreated += 1;
 
             for (const row of piapiSeedPriceRows(spec)) {
-                const key = row.spec ?? "";
-                if (have.has(key)) continue;
                 await tx.insert(modelPrices).values({
                     channelModelId: model.id,
                     billingMode: "per_image",
@@ -84,7 +77,6 @@ export async function seedPiapiChannel(db: Database): Promise<PiapiChannelSeedRe
                     minCharge: "0.000000",
                 });
                 pricesInserted += 1;
-                have.add(key);
             }
         }
 

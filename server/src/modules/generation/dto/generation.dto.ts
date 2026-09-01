@@ -17,10 +17,11 @@ export class CreateGenerationDto {
     @MaxLength(20_000)
     prompt!: string;
 
-    @ApiPropertyOptional({ description: "参考图 storageKey 列表", type: [String] })
+    @ApiPropertyOptional({ description: "参考图 storageKey 或公网 http(s) 图片地址", type: [String] })
     @IsOptional()
     @IsArray()
     @IsString({ each: true })
+    @MaxLength(2048, { each: true })
     references?: string[];
 
     @ApiPropertyOptional({ description: "蒙版 storageKey" })
