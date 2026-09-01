@@ -1,5 +1,5 @@
 # 依赖安装阶段：isolated-vm 需要 C++ 工具链，构建完成后不会进入运行镜像。
-FROM node:22-bookworm-slim AS deps
+FROM node:24-bookworm-slim AS deps
 
 WORKDIR /app
 RUN apt-get update \
@@ -7,7 +7,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY server/package.json server/package-lock.json ./
-RUN npm ci
+RUN npm install
 
 FROM deps AS build
 COPY server/tsconfig.json server/tsconfig.build.json ./
@@ -15,7 +15,7 @@ COPY server/src ./src
 RUN npm run build
 
 # 运行阶段：只带生产依赖与编译产物。
-FROM node:22-bookworm-slim AS runtime
+FROM node:24-bookworm-slim AS runtime
 
 WORKDIR /app
 ENV NODE_ENV=production

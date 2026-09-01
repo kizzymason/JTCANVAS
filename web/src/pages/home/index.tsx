@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { Trans, useTranslation } from "react-i18next";
 
 import { navigationTools } from "@/constant/navigation-tools";
+import { requireAuth } from "@/stores/use-auth-modal-store";
 
 function Highlighter({ action, color, children }: { action: "highlight" | "underline"; color: string; children?: ReactNode }) {
     return (
@@ -23,6 +24,10 @@ export default function IndexPage() {
     const { t } = useTranslation();
     const navigate = useNavigate();
     const [primaryTool] = navigationTools;
+    const go = (path: string) => {
+        if (requireAuth(path)) return;
+        navigate(path);
+    };
 
     return (
         <main className="relative h-full overflow-y-auto bg-background bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px] text-stone-950 dark:bg-[radial-gradient(rgba(245,245,244,.18)_1px,transparent_1px)] dark:text-stone-100">
@@ -36,10 +41,10 @@ export default function IndexPage() {
                         <Trans i18nKey="home.description" components={{ canvas: <Highlighter action="underline" color="#FF9800" />, content: <Highlighter action="highlight" color="#87CEFA" /> }} />
                     </p>
                     <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
-                        <Button type="primary" size="large" onClick={() => navigate(`/${primaryTool.slug}`)} icon={<ArrowRight className="size-4" />} iconPlacement="end">
+                        <Button type="primary" size="large" onClick={() => go(`/${primaryTool.slug}`)} icon={<ArrowRight className="size-4" />} iconPlacement="end">
                             {t("home.start")}
                         </Button>
-                        <Button size="large" onClick={() => navigate("/canvas")}>
+                        <Button size="large" onClick={() => go("/canvas")}>
                             {t("home.openCanvas")}
                         </Button>
                     </div>

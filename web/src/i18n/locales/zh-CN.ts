@@ -367,6 +367,7 @@ export default {
         loginHint: "还没有账号？点击上方切换到注册",
         registerHint: "注册后需要先充值余额才能生成",
         registrationClosed: "当前站点已关闭注册，请联系管理员",
+        close: "关闭",
     },
     pricing: {
         estimate: "预计",
