@@ -83,6 +83,35 @@ export type AdminLedgerEntry = { id: string; username: string | null; type: stri
 export type AdminReconcileMismatch = { userId: string; username: string; expected: string; actual: string };
 export type AdminCardBatch = { id: string; name: string; faceValue: string; quantity: number; usedCount: number; voidCount: number; expiresAt: string | null; createdAt: string };
 export type AdminCard = { id: string; code: string; faceValue: string; status: "unused" | "used" | "void"; redeemedAt: string | null; expiresAt: string | null };
+export type AdminPaymentChannel = {
+    id: string;
+    name: string;
+    driver: "epay";
+    gatewayUrl: string;
+    merchantId: string;
+    methods: Array<"alipay" | "wxpay">;
+    cid: string;
+    enabled: boolean;
+    sortOrder: number;
+    hasSecret: boolean;
+    createdAt: string;
+    updatedAt: string;
+};
+export type AdminRechargePackage = {
+    id: string;
+    name: string;
+    faceValue: string;
+    salePrice: string;
+    enabled: boolean;
+    sortOrder: number;
+    createdAt: string;
+    updatedAt: string;
+};
+export type AdminRechargeSettings = {
+    allowCustomAmount: boolean;
+    minAmount: string;
+    maxAmount: string;
+};
 export type AdminAuditLog = { id: string; actorName: string; action: string; targetType: string; targetId: string; before: unknown; after: unknown; ip: string; createdAt: string };
 export type VisitorKind = "human" | "bot" | "suspected";
 export type VisitorSummaryDay = {
@@ -182,4 +211,16 @@ export const adminApi = {
     visitorsSummary: () => apiGet<VisitorSummary>("/admin/visitors/summary"),
     visitorEvents: (params: { page: number; pageSize: number; kind?: VisitorKind; path?: string; keyword?: string }) =>
         apiGet<Paginated<VisitorEvent>>("/admin/visitors/events", { params }),
+
+    paymentChannels: () => apiGet<AdminPaymentChannel[]>("/admin/payments/channels"),
+    createPaymentChannel: (body: Record<string, unknown>) => apiPost<{ id: string }>("/admin/payments/channels", body),
+    updatePaymentChannel: (id: string, body: Record<string, unknown>) => apiPatch<{ id: string }>(`/admin/payments/channels/${id}`, body),
+    deletePaymentChannel: (id: string) => apiDelete<{ id: string }>(`/admin/payments/channels/${id}`),
+    paymentChannelBalance: (id: string) => apiGet<{ balance: string }>(`/admin/payments/channels/${id}/balance`),
+
+    rechargePackages: () => apiGet<{ items: AdminRechargePackage[]; settings: AdminRechargeSettings }>("/admin/recharge-packages"),
+    createRechargePackage: (body: Record<string, unknown>) => apiPost<{ id: string }>("/admin/recharge-packages", body),
+    updateRechargePackage: (id: string, body: Record<string, unknown>) => apiPatch<{ id: string }>(`/admin/recharge-packages/${id}`, body),
+    deleteRechargePackage: (id: string) => apiDelete<{ id: string }>(`/admin/recharge-packages/${id}`),
+    saveRechargeSettings: (body: AdminRechargeSettings) => apiPatch<{ settings: AdminRechargeSettings }>("/admin/recharge-settings", body),
 };

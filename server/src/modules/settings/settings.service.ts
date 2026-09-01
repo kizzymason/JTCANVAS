@@ -20,6 +20,14 @@ export type SiteSettings = {
 
 export type PublicSiteInfo = Pick<SiteSettings, "siteName" | "registrationEnabled" | "rechargeNotice" | "imageGenerationEnabled" | "videoGenerationEnabled" | "agentEnabled">;
 
+export type RechargeSettings = {
+    allowCustomAmount: boolean;
+    /** Custom top-up floor, NUMERIC string. Default 10. */
+    minAmount: string;
+    /** Custom top-up ceiling, NUMERIC string. Default 10000. */
+    maxAmount: string;
+};
+
 export type StorageSettings = {
     driver: "local" | "s3";
     s3: {
@@ -37,6 +45,7 @@ export type StorageSettings = {
 
 const SITE_KEY = "site";
 const STORAGE_KEY = "storage";
+const RECHARGE_KEY = "recharge";
 const CACHE_PREFIX = "settings:";
 const CACHE_TTL_SECONDS = 300;
 
@@ -48,6 +57,12 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
     imageGenerationEnabled: true,
     videoGenerationEnabled: true,
     agentEnabled: true,
+};
+
+export const DEFAULT_RECHARGE_SETTINGS: RechargeSettings = {
+    allowCustomAmount: true,
+    minAmount: "10.000000",
+    maxAmount: "10000.000000",
 };
 
 const LEGACY_SITE_NAMES = new Set(["无限画布", "景甜画布"]);
@@ -87,6 +102,10 @@ export class SettingsService {
         return this.read(STORAGE_KEY, DEFAULT_STORAGE_SETTINGS);
     }
 
+    getRecharge() {
+        return this.read(RECHARGE_KEY, DEFAULT_RECHARGE_SETTINGS);
+    }
+
     async saveSite(patch: Partial<SiteSettings>, updatedBy?: string) {
         const current = await this.getSite();
         const next: SiteSettings = { ...current };
@@ -99,6 +118,10 @@ export class SettingsService {
 
     saveStorage(value: StorageSettings, updatedBy?: string) {
         return this.write(STORAGE_KEY, value, updatedBy);
+    }
+
+    saveRecharge(value: RechargeSettings, updatedBy?: string) {
+        return this.write(RECHARGE_KEY, value, updatedBy);
     }
 
     private async read<T>(key: string, fallback: T): Promise<T> {

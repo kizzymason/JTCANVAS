@@ -27,6 +27,7 @@ import { SettingsModule } from "./modules/settings/settings.module";
 import { StorageModule } from "./modules/storage/storage.module";
 import { VisitorsModule } from "./modules/visitors/visitors.module";
 import { WalletModule } from "./modules/wallet/wallet.module";
+import { PaymentsModule } from "./modules/payments/payments.module";
 
 /** Shared by the API process and the worker; the worker adds the queue processor on top. */
 @Module({
@@ -39,7 +40,7 @@ import { WalletModule } from "./modules/wallet/wallet.module";
                     level: config.get<string>("logLevel"),
                     genReqId: (request) => String(request.headers["x-request-id"] ?? randomUUID()),
                     // Never let a credential or a cookie reach the logs.
-                    redact: ["req.headers.cookie", "req.headers.authorization", "req.body.password", "req.body.currentPassword", "req.body.newPassword", "req.body.apiKey", "req.body.secretAccessKey"],
+                    redact: ["req.headers.cookie", "req.headers.authorization", "req.body.password", "req.body.currentPassword", "req.body.newPassword", "req.body.apiKey", "req.body.secretAccessKey", "req.body.secret"],
                     transport: config.get<string>("env") === "development" ? { target: "pino-pretty", options: { singleLine: true, translateTime: "SYS:HH:MM:ss" } } : undefined,
                 },
             }),
@@ -69,6 +70,7 @@ import { WalletModule } from "./modules/wallet/wallet.module";
         ProjectsModule,
         AssetsModule,
         VisitorsModule,
+        PaymentsModule,
         AdminModule,
     ],
     controllers: [HealthController],

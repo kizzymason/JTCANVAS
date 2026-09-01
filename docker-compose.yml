@@ -46,6 +46,9 @@ services:
             GENERATION_MAX_ACTIVE_PER_USER: ${GENERATION_MAX_ACTIVE_PER_USER:-3}
             LOG_LEVEL: ${LOG_LEVEL:-info}
             WHATSTOKEN_API_KEY: ${WHATSTOKEN_API_KEY:-}
+            ZPAY_PID: ${ZPAY_PID:-}
+            ZPAY_KEY: ${ZPAY_KEY:-}
+            ZPAY_GATEWAY: ${ZPAY_GATEWAY:-https://zpayz.cn}
             APP_PUBLIC_URL: ${APP_PUBLIC_URL:-}
         volumes:
             - storage:/data/storage

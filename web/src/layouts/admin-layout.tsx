@@ -1,5 +1,5 @@
 import { Button, Layout, Menu } from "antd";
-import { AppWindow, ArrowLeft, BarChart3, BookOpen, ClipboardList, CreditCard, Database, FileClock, Gauge, KeyRound, Layers, ScrollText, Settings, Ticket, Users } from "lucide-react";
+import { AppWindow, ArrowLeft, BarChart3, BookOpen, ClipboardList, CreditCard, Database, FileClock, Gauge, KeyRound, Landmark, Layers, Package, ScrollText, Settings, Ticket, Users } from "lucide-react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
@@ -25,6 +25,8 @@ const navGroups: Array<{ titleKey: string; items: AdminNavItem[] }> = [
         titleKey: "admin.nav.groupFinance",
         items: [
             { key: "finance", path: "/admin/finance", icon: CreditCard, labelKey: "admin.nav.finance" },
+            { key: "payments", path: "/admin/payments", icon: Landmark, labelKey: "admin.nav.payments" },
+            { key: "packages", path: "/admin/packages", icon: Package, labelKey: "admin.nav.packages" },
             { key: "cards", path: "/admin/cards", icon: Ticket, labelKey: "admin.nav.cards" },
         ],
     },

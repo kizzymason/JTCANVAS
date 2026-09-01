@@ -48,6 +48,49 @@ export type OrderRecord = {
     createdAt: string;
 };
 
+export type RechargePackageOption = {
+    id: string;
+    name: string;
+    faceValue: string;
+    salePrice: string;
+};
+
+export type RechargePayMethod = {
+    method: "alipay" | "wxpay";
+    label: string;
+    channelId: string;
+};
+
+export type RechargeCatalog = {
+    packages: RechargePackageOption[];
+    allowCustomAmount: boolean;
+    minAmount: string;
+    maxAmount: string;
+    methods: RechargePayMethod[];
+    notice: string;
+    available: boolean;
+};
+
+export type RechargeCheckout = {
+    orderNo: string;
+    amount: string;
+    creditAmount: string;
+    method: string;
+    payUrl: string;
+    qrcode: string;
+    img: string;
+};
+
+export type RechargeOrderStatus = {
+    orderNo: string;
+    amount: string;
+    creditAmount: string;
+    status: string;
+    paymentProvider: string;
+    paidAt: string | null;
+    createdAt: string;
+};
+
 export function fetchBootstrap() {
     return apiGet<{ site: SiteInfo; user: CurrentUser | null }>("/auth/bootstrap");
 }
@@ -99,6 +142,18 @@ export function fetchOrders(params: { page: number; pageSize: number }) {
 /** Card redemption moves money, so it carries an idempotency key generated per attempt. */
 export function redeemCard(code: string, idempotencyKey = newIdempotencyKey()) {
     return apiPost<{ amount: string; balance: string; orderNo: string }>("/wallet/redeem", { code }, idempotencyHeaders(idempotencyKey));
+}
+
+export function fetchRechargeCatalog() {
+    return apiGet<RechargeCatalog>("/wallet/recharge-catalog");
+}
+
+export function createRecharge(body: { packageId?: string; amount?: string; method: "alipay" | "wxpay"; channelId?: string }, idempotencyKey = newIdempotencyKey()) {
+    return apiPost<RechargeCheckout>("/wallet/recharge", body, idempotencyHeaders(idempotencyKey));
+}
+
+export function fetchRechargeOrder(orderNo: string) {
+    return apiGet<RechargeOrderStatus>(`/wallet/orders/${orderNo}`);
 }
 
 export function updatePreferences(preferences: Record<string, unknown>) {

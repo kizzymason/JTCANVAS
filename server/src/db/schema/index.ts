@@ -6,4 +6,5 @@ export * from "./generation";
 export * from "./content";
 export * from "./system";
 export * from "./visitors";
+export * from "./payments";
 

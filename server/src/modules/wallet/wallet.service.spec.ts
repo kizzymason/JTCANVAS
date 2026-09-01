@@ -5,7 +5,7 @@ import type postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createPgClient, type Database } from "../../db/db.module";
 import * as schema from "../../db/schema";
-import { users, walletLedger, wallets } from "../../db/schema";
+import { users, walletLedger, wallets, orders } from "../../db/schema";
 import { toMoneyString } from "../../common/money";
 import { WalletService } from "./wallet.service";
 
@@ -199,5 +199,45 @@ describe("WalletService", () => {
         const userId = await createUser();
         // Last line of defence: even a direct UPDATE must not be able to go negative.
         await expect(db.update(wallets).set({ balance: "-1.000000" }).where(eq(wallets.userId, userId))).rejects.toThrow();
+    });
+
+    it("credits a pending gateway order once and ignores a second fulfill", async () => {
+        const userId = await createUser();
+        const pending = await wallet.createPendingOrder({
+            userId,
+            amount: "10.00",
+            paymentProvider: "alipay",
+            metadata: { creditAmount: "12.000000" },
+        });
+        expect(pending.status).toBe("pending");
+
+        const first = await wallet.fulfillPendingOrder({ orderNo: pending.orderNo, paidAmount: "10.00", providerTxnId: "T1" });
+        expect(first.alreadyPaid).toBe(false);
+        expect((await wallet.get(userId)).balance).toBe("12.000000");
+        expect((await wallet.get(userId)).totalRecharged).toBe("12.000000");
+
+        const second = await wallet.fulfillPendingOrder({ orderNo: pending.orderNo, paidAmount: "10.00", providerTxnId: "T1" });
+        expect(second.alreadyPaid).toBe(true);
+        expect((await wallet.get(userId)).balance).toBe("12.000000");
+
+        const ledger = await db.select().from(walletLedger).where(eq(walletLedger.userId, userId));
+        expect(ledger).toHaveLength(1);
+        const [order] = await db.select().from(orders).where(eq(orders.orderNo, pending.orderNo));
+        expect(order.status).toBe("paid");
+        expect(order.amount).toBe("10.000000");
+    });
+
+    it("rejects a notify whose money does not match the pending order", async () => {
+        const userId = await createUser();
+        const pending = await wallet.createPendingOrder({
+            userId,
+            amount: "10.00",
+            paymentProvider: "alipay",
+            metadata: { creditAmount: "10.000000" },
+        });
+        await expect(wallet.fulfillPendingOrder({ orderNo: pending.orderNo, paidAmount: "9.99", providerTxnId: "T2" })).rejects.toThrow();
+        expect((await wallet.get(userId)).balance).toBe("0.000000");
+        const [order] = await db.select().from(orders).where(eq(orders.orderNo, pending.orderNo));
+        expect(order.status).toBe("pending");
     });
 });
