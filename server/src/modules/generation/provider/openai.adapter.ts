@@ -1,9 +1,21 @@
 import { Injectable, Logger } from "@nestjs/common";
 import axios, { type AxiosInstance } from "axios";
-import { badRequest } from "../../../common/errors";
+import { AppError, badRequest } from "../../../common/errors";
 import type { Capability } from "../../pricing/pricing.types";
 import { normalizeBackground, normalizeQuality, pricingSpec, resolveRequestSize } from "../image-size";
 import { ProviderAdapter, type DeltaSink, type GeneratedBinary, type GenerationOutput, type GenerationRequest, type ProviderCredentials } from "./provider.types";
+import {
+    SEEDANCE_CREATE_PATHS,
+    SEEDANCE_ENDPOINT_MISSING,
+    asRecord,
+    isSeedanceFailedStatus,
+    isSeedanceSucceededStatus,
+    seedanceCreateBody,
+    seedanceStatusPaths,
+    videoErrorMessage,
+    videoResultUrl,
+    videoTaskId,
+} from "./seedance-video";
 
 const VIDEO_POLL_INTERVAL_MS = 2500;
 const VIDEO_MAX_ATTEMPTS = 720; // 30 minutes at 2.5s.
@@ -107,59 +119,41 @@ export class OpenAiAdapter extends ProviderAdapter {
     }
 
     /**
-     * Seedance on NewAPI-style relays uses `/v1/videos/generations` plus a content array so video
-     * references can be billed as 含视. Falls back to the Sora `/v1/videos` form if that path 404s.
+     * WhatsToken / NewAPI Seedance: POST `/v1/video/generations`. Do not fall back to Sora
+     * `/v1/videos` — that 404s on the marketing host and never appears in the upstream log.
      */
     private async seedanceVideo(http: AxiosInstance, request: GenerationRequest): Promise<GenerationOutput> {
         const prompt = withSystemPrompt(request);
-        const resolution = seedanceResolution(request.resolution);
-        const body: Record<string, unknown> = {
+        const body = seedanceCreateBody({
             model: request.model,
             prompt,
-            duration: request.seconds || 5,
-            resolution,
-            watermark: Boolean(request.watermark),
-        };
-        if (request.generateAudio !== undefined) body.generate_audio = request.generateAudio;
-        const ratio = seedanceAspectRatio(request.size);
-        if (ratio) body.aspect_ratio = ratio;
+            seconds: request.seconds,
+            resolution: request.resolution,
+            size: request.size,
+            generateAudio: request.generateAudio,
+            watermark: request.watermark,
+            references: request.references.slice(0, 7).map((reference) => ({
+                mimeType: reference.mimeType,
+                url: publicOrDataUrl(reference),
+            })),
+        });
 
-        const content: Array<Record<string, unknown>> = [{ type: "text", text: prompt }];
-        for (const reference of request.references.slice(0, 7)) {
-            const url = dataUrlOf(reference.body, reference.mimeType);
-            if (reference.mimeType.toLowerCase().startsWith("video/")) {
-                content.push({ type: "video_url", video_url: { url }, role: "reference_video" });
-            } else if (reference.mimeType.toLowerCase().startsWith("audio/")) {
-                content.push({ type: "audio_url", audio_url: { url }, role: "reference_audio" });
-            } else {
-                content.push({ type: "image_url", image_url: { url }, role: "reference_image" });
+        let lastMissing: unknown;
+        for (const path of SEEDANCE_CREATE_PATHS) {
+            try {
+                const created = await http.post<Record<string, unknown>>(path, body);
+                const taskId = videoTaskId(created.data);
+                if (!taskId) throw badRequest("NO_VIDEO_TASK_ID", videoErrorMessage(created.data) || "视频接口没有返回任务 ID");
+                this.logger.log(`Seedance ${request.model} submitted via ${path} as ${taskId}`);
+                return this.pollSeedanceVideo(http, taskId, request.signal);
+            } catch (error) {
+                if (error instanceof AppError) throw error;
+                if (!isMissingEndpoint(error)) throw providerHttpError(error);
+                lastMissing = error;
+                this.logger.warn(`Seedance ${path} missing on ${request.model}, trying next path`);
             }
         }
-        if (content.length > 1) body.content = content;
-
-        try {
-            const created = await http.post<Record<string, unknown>>("/v1/videos/generations", body);
-            const taskId = videoTaskId(created.data);
-            if (!taskId) throw badRequest("NO_VIDEO_TASK_ID", videoErrorMessage(created.data) || "视频接口没有返回任务 ID");
-            return this.pollSeedanceVideo(http, taskId, request.signal);
-        } catch (error) {
-            if (!isNotFound(error)) throw error;
-            this.logger.warn(`Seedance /v1/videos/generations missing on ${request.model}, falling back to /v1/videos`);
-            const form = new FormData();
-            form.append("model", request.model);
-            form.append("prompt", prompt);
-            if (request.seconds) form.append("seconds", String(request.seconds));
-            form.append("resolution", resolution);
-            const videoSize = resolveRequestSize("1K", request.size, request.aspectPresets);
-            if (videoSize) form.append("size", videoSize);
-            if (request.generateAudio !== undefined) form.append("generate_audio", String(request.generateAudio));
-            form.append("watermark", String(Boolean(request.watermark)));
-            for (const reference of request.references.slice(0, 7)) form.append("input_reference[]", blobOf(reference.body, reference.mimeType), reference.fileName);
-            const created = await http.post<VideoApiResponse>("/v1/videos", form);
-            const taskId = created.data?.id;
-            if (!taskId) throw badRequest("NO_VIDEO_TASK_ID", created.data?.error?.message || "视频接口没有返回任务 ID");
-            return this.pollOpenAiVideo(http, taskId, request.signal);
-        }
+        throw badRequest("VIDEO_ENDPOINT_NOT_FOUND", providerHttpMessage(lastMissing) || SEEDANCE_ENDPOINT_MISSING);
     }
 
     private async pollOpenAiVideo(http: AxiosInstance, taskId: string, signal?: AbortSignal): Promise<GenerationOutput> {
@@ -183,12 +177,11 @@ export class OpenAiAdapter extends ProviderAdapter {
             throwIfAborted(signal);
             await delay(VIDEO_POLL_INTERVAL_MS, signal);
             const payload = await readSeedanceTask(http, taskId, signal);
-            const status = String(payload.status || "").toLowerCase();
-            if (status === "failed" || status === "error") throw badRequest("VIDEO_FAILED", videoErrorMessage(payload) || "视频生成失败");
-            if (status && status !== "completed" && status !== "succeeded" && status !== "success") continue;
+            const status = String(payload.status || "");
+            if (isSeedanceFailedStatus(status)) throw badRequest("VIDEO_FAILED", videoErrorMessage(payload) || "视频生成失败");
             const url = videoResultUrl(payload);
             if (!url) {
-                if (!status || status === "pending" || status === "processing" || status === "queued" || status === "running") continue;
+                if (!status || !isSeedanceSucceededStatus(status)) continue;
                 throw badRequest("NO_VIDEO_RETURNED", "视频任务完成但没有返回文件");
             }
             return { binaries: [await fetchBinary(url, signal)], providerTaskId: taskId };
@@ -356,74 +349,48 @@ function dataUrlOf(body: Buffer, mimeType: string) {
     return `data:${mimeType || "application/octet-stream"};base64,${body.toString("base64")}`;
 }
 
-function seedanceResolution(value: string | undefined) {
-    const raw = (value ?? "").trim().replace(/p$/i, "");
-    if (!raw || raw === "auto" || raw === "high" || raw === "medium") return "720p";
-    if (raw === "low") return "480p";
-    if (raw.toLowerCase() === "4k" || raw === "2160") return "2160p";
-    return `${raw}p`;
+function publicOrDataUrl(reference: { body: Buffer; mimeType: string; publicUrl?: string }) {
+    const url = reference.publicUrl?.trim() ?? "";
+    if (/^https?:\/\//i.test(url)) return url;
+    return dataUrlOf(reference.body, reference.mimeType);
 }
 
-function seedanceAspectRatio(size: string | undefined) {
-    const value = (size ?? "").trim();
-    if (!value || value === "auto") return undefined;
-    if (value.includes(":")) return value;
-    const match = value.match(/^(\d+)x(\d+)$/i);
-    if (!match) return undefined;
-    const width = Number(match[1]);
-    const height = Number(match[2]);
-    if (!width || !height) return undefined;
-    const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a);
-    const divisor = gcd(width, height);
-    return `${width / divisor}:${height / divisor}`;
+function isMissingEndpoint(error: unknown) {
+    if (!axios.isAxiosError(error)) return false;
+    const status = error.response?.status;
+    return status === 404 || status === 405;
 }
 
-function isNotFound(error: unknown) {
-    return axios.isAxiosError(error) && error.response?.status === 404;
+function providerHttpMessage(error: unknown) {
+    if (axios.isAxiosError(error)) {
+        return videoErrorMessage(asRecord(error.response?.data)) || error.message;
+    }
+    return error instanceof Error ? error.message : "";
 }
 
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-    return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
-}
-
-function videoTaskId(payload: Record<string, unknown> | undefined) {
-    if (!payload) return "";
-    const nested = asRecord(payload.data);
-    const id = payload.id ?? payload.task_id ?? nested?.id ?? nested?.task_id;
-    return typeof id === "string" && id.trim() ? id.trim() : "";
-}
-
-function videoErrorMessage(payload: Record<string, unknown> | undefined) {
-    if (!payload) return "";
-    const error = asRecord(payload.error);
-    const nested = asRecord(payload.data);
-    const nestedError = asRecord(nested?.error);
-    const message = error?.message ?? nestedError?.message ?? payload.message ?? payload.msg ?? nested?.message;
-    return typeof message === "string" ? message : "";
-}
-
-function videoResultUrl(payload: Record<string, unknown>) {
-    const nested = asRecord(payload.data);
-    const output = asRecord(payload.output) ?? asRecord(nested?.output);
-    const candidates = [payload.url, payload.result_url, payload.video_url, nested?.url, nested?.result_url, nested?.video_url, output?.url, output?.video_url];
-    const found = candidates.find((item) => typeof item === "string" && item.trim());
-    return typeof found === "string" ? found : "";
+function providerHttpError(error: unknown): never {
+    throw badRequest("PROVIDER_ERROR", providerHttpMessage(error) || "上游视频接口请求失败");
 }
 
 async function readSeedanceTask(http: AxiosInstance, taskId: string, signal?: AbortSignal) {
-    const paths = [`/v1/videos/generations/${encodeURIComponent(taskId)}`, `/v1/tasks/${encodeURIComponent(taskId)}`, `/v1/videos/${encodeURIComponent(taskId)}`];
+    let merged: Record<string, unknown> | undefined;
     let lastError: unknown;
-    for (const path of paths) {
+    for (const path of seedanceStatusPaths(taskId)) {
         try {
             const response = await http.get<Record<string, unknown>>(path, { signal });
-        const nested = asRecord(response.data?.data);
-        const raw = asRecord(response.data) ?? {};
-        return nested ? { ...raw, ...nested } : raw;
+            const nested = asRecord(response.data?.data);
+            const raw = asRecord(response.data) ?? {};
+            const piece = nested ? { ...raw, ...nested } : raw;
+            merged = merged ? { ...merged, ...piece } : piece;
+            if (videoResultUrl(merged)) return merged;
+            const status = String(merged.status || "");
+            if (status && !isSeedanceSucceededStatus(status)) return merged;
         } catch (error) {
             lastError = error;
-            if (!isNotFound(error)) throw error;
+            if (!isMissingEndpoint(error)) throw providerHttpError(error);
         }
     }
-    throw lastError instanceof Error ? lastError : badRequest("VIDEO_STATUS_UNKNOWN", "无法查询视频任务状态");
+    if (merged) return merged;
+    throw badRequest("VIDEO_STATUS_UNKNOWN", providerHttpMessage(lastError) || "无法查询视频任务状态");
 }
 

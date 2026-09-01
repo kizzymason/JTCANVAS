@@ -555,7 +555,7 @@ export default {
             aspectRatiosHint: "只显示勾选的比例；auto 表示由模型自行决定",
             aspectRatiosRequired: "至少选择一个宽高比",
             aspectPresets: "宽高比预设",
-            aspectPresetsHint: "按模型独立配置。默认像素对齐 Seedream 官方档位（16:9 的 1K 为 1424x800、2K 为 2816x1584，不是简单翻倍）。PiAPI Pro 的 16:9 为 1312x736 / 2560x1440。2K / 4K 留空时按该比例官方档位补齐；计费始终按所选 1K/2K/4K，不按最长边。",
+            aspectPresetsHint: "按模型独立配置。默认像素对齐 Seedream 官方档位（16:9 的 1K 为 1424x800、2K 为 2816x1584，不是简单翻倍）。PiAPI Seedream 与官方像素相同。2K / 4K 留空时按该比例官方档位补齐；计费始终按所选 1K/2K/4K，不按最长边。",
             aspectPresetsRequired: "至少保留一个宽高比",
             aspectPresetRatio: "比例",
             aspectPresetLabel: "显示名",
