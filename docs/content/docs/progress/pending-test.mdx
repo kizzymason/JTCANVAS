@@ -5,7 +5,7 @@ description: Implemented changes that still need manual verification
 
 # Pending Tests
 
-The current release needs manual verification in these areas:
+- Image workbench on a phone (~414px): the compact model/params row (long names such as Seedream 5 Pro 【A低价渠道】【推荐】 · auto · auto plus 调整) must stay inside the viewport with the name truncated; it must not create a page-level horizontal scrollbar. Tapping 调整 still opens settings. Video studio must keep the same behavior.
 
 - Online recharge: admin `/admin/payments` can add a Z-Pay (易支付) channel with PID and key (never shown again in plaintext) and enable Alipay; `/admin/packages` lists 10/20/50/100 packages plus custom-amount min/max (default min ¥10, max ¥10000). The wallet top-up modal should list those packages, charge sale price, credit face value, open the Z-Pay cashier/QR, and credit the wallet after Alipay success (or after returning to the site). Duplicate notify must not double-credit. Local machines that Z-Pay cannot reach still settle when the modal polls `GET /api/wallet/orders/:orderNo`, which queries Z-Pay. Keys go in env `ZPAY_PID` / `ZPAY_KEY` or the admin form, not in git.
 
