@@ -2,7 +2,15 @@ import { Button, Form, Input, Space } from "antd";
 import { Plus, RotateCcw, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { DEFAULT_ASPECT_RATIO_ORDER, defaultAspectPresets, defaultSizesForRatio } from "@/lib/aspect-presets";
+import {
+    DEFAULT_ASPECT_RATIO_ORDER,
+    DEFAULT_VIDEO_ASPECT_RATIO_ORDER,
+    PIAPI_ASPECT_RATIOS,
+    defaultAspectPresets,
+    defaultSizesForRatio,
+    defaultVideoAspectPresets,
+    piapiAspectPresets,
+} from "@/lib/aspect-presets";
 
 const PIXEL_PATTERN = /^\d+x\d+$/i;
 const RATIO_PATTERN = /^(auto|\d+(\.\d+)?:\d+(\.\d+)?)$/i;
@@ -21,20 +29,30 @@ function optionalPixelRule(message: string) {
 
 type PresetRow = { ratio?: string; label?: string; sizes?: Partial<Record<"1K" | "2K" | "4K", string>> };
 
-export function AspectPresetEditor() {
+type AspectPresetEditorProps = {
+    variant?: "image" | "video" | "piapi";
+};
+
+export function AspectPresetEditor({ variant = "image" }: AspectPresetEditorProps) {
     const { t } = useTranslation();
     const form = Form.useFormInstance();
+    const modelName = String(Form.useWatch("name", form) ?? "");
+    const piapiKind = modelName.includes("lite") ? "lite" : "pro";
+    const catalog =
+        variant === "video" ? defaultVideoAspectPresets() : variant === "piapi" ? piapiAspectPresets(piapiKind) : defaultAspectPresets();
+    const catalogOrder = variant === "video" ? DEFAULT_VIDEO_ASPECT_RATIO_ORDER : variant === "piapi" ? PIAPI_ASPECT_RATIOS : DEFAULT_ASPECT_RATIO_ORDER;
     const rows = (Form.useWatch(["features", "aspectPresets"], form) as PresetRow[] | undefined) ?? [];
     const used = new Set(rows.map((item) => String(item?.ratio ?? "").trim()).filter(Boolean));
-    const unusedDefaults = [...DEFAULT_ASPECT_RATIO_ORDER, "auto"].filter((ratio) => !used.has(ratio));
+    const unusedDefaults = [...catalogOrder, "auto"].filter((ratio) => !used.has(ratio));
 
     const addRatio = (ratio: string) => {
         const list = [...((form.getFieldValue(["features", "aspectPresets"]) as PresetRow[] | undefined) ?? [])];
         if (list.some((item) => item?.ratio === ratio)) return;
+        const fromCatalog = catalog.find((item) => item.ratio === ratio);
         list.push({
             ratio,
             label: ratio,
-            sizes: ratio.toLowerCase() === "auto" ? {} : defaultSizesForRatio(ratio),
+            sizes: ratio.toLowerCase() === "auto" ? {} : fromCatalog?.sizes ?? defaultSizesForRatio(ratio),
         });
         form.setFieldValue(["features", "aspectPresets"], list);
     };
@@ -108,7 +126,7 @@ export function AspectPresetEditor() {
                                                   ]
                                         }
                                     >
-                                        <Input placeholder="1280x720" disabled={isAuto} maxLength={16} />
+                                        <Input placeholder="1424x800" disabled={isAuto} maxLength={16} />
                                     </Form.Item>
                                     <Form.Item name={[field.name, "sizes", "2K"]} className="mb-0" rules={isAuto ? [] : optionalPixelRule(t("admin.channels.aspectPresetSizeInvalid"))}>
                                         <Input placeholder={t("admin.channels.aspectPreset2KPlaceholder")} disabled={isAuto} maxLength={16} />
@@ -133,7 +151,7 @@ export function AspectPresetEditor() {
                 <Button size="small" onClick={addCustom}>
                     {t("admin.channels.aspectPresetAddCustom")}
                 </Button>
-                <Button size="small" icon={<RotateCcw className="size-3" />} onClick={() => form.setFieldValue(["features", "aspectPresets"], defaultAspectPresets())}>
+                <Button size="small" icon={<RotateCcw className="size-3" />} onClick={() => form.setFieldValue(["features", "aspectPresets"], catalog)}>
                     {t("admin.channels.aspectPresetRestore")}
                 </Button>
             </Space>

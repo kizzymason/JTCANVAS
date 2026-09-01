@@ -9,7 +9,7 @@ import { ApiError } from "@/services/api/client";
 import { adminApi, type AdminChannel, type AdminChannelModel, type AdminModelPrice } from "@/services/api/admin";
 import { formatMoney } from "@/services/api/models";
 import { PIAPI_BASE_URL, PIAPI_SEEDREAM_LABELS, PIAPI_SEEDREAM_TASK_TYPES } from "@/lib/piapi/piapi-models";
-import { parseAspectPresets } from "@/lib/aspect-presets";
+import { defaultAspectPresets, defaultVideoAspectPresets, parseAspectPresets, piapiAspectPresets } from "@/lib/aspect-presets";
 import { DEFAULT_MODEL_FEATURES, IMAGE_RESOLUTIONS } from "@/lib/model-features";
 import { AspectPresetEditor } from "./components/aspect-preset-editor";
 
@@ -290,16 +290,24 @@ export default function AdminChannelsPage() {
                 afterOpenChange={(open) => {
                     if (!open) return;
                     const features = target?.model?.features;
+                    const capability = target?.model?.capability ?? "image";
+                    const aspectPresets = features
+                        ? parseAspectPresets(features.aspectPresets, features.aspectRatios)
+                        : isPiapi
+                          ? piapiAspectPresets("pro")
+                          : capability === "video"
+                            ? defaultVideoAspectPresets()
+                            : defaultAspectPresets();
                     form.setFieldsValue({
                         name: target?.model?.name ?? "",
                         displayName: target?.model?.displayName ?? "",
-                        capability: target?.model?.capability ?? "image",
+                        capability,
                         enabled: target?.model?.enabled ?? true,
                         script: "",
                         features: {
                             ...DEFAULT_MODEL_FEATURES,
                             ...features,
-                            aspectPresets: parseAspectPresets(features?.aspectPresets, features?.aspectRatios),
+                            aspectPresets,
                         },
                     });
                 }}
@@ -310,7 +318,16 @@ export default function AdminChannelsPage() {
                             <Select
                                 disabled={Boolean(target?.model)}
                                 options={PIAPI_SEEDREAM_TASK_TYPES.map((name) => ({ value: name, label: `${PIAPI_SEEDREAM_LABELS[name]} (${name})` }))}
-                                onChange={(name: (typeof PIAPI_SEEDREAM_TASK_TYPES)[number]) => form.setFieldsValue({ displayName: PIAPI_SEEDREAM_LABELS[name], capability: "image" })}
+                                onChange={(name: (typeof PIAPI_SEEDREAM_TASK_TYPES)[number]) =>
+                                    form.setFieldsValue({
+                                        displayName: PIAPI_SEEDREAM_LABELS[name],
+                                        capability: "image",
+                                        features: {
+                                            ...form.getFieldValue("features"),
+                                            aspectPresets: piapiAspectPresets(name.includes("lite") ? "lite" : "pro"),
+                                        },
+                                    })
+                                }
                             />
                         ) : (
                             <Input maxLength={128} disabled={Boolean(target?.model)} />
@@ -354,7 +371,7 @@ export default function AdminChannelsPage() {
                     ) : null}
                     {capability === "image" || capability === "video" ? (
                         <Form.Item label={t("admin.channels.aspectPresets")} extra={t("admin.channels.aspectPresetsHint")} required>
-                            <AspectPresetEditor />
+                            <AspectPresetEditor variant={isPiapi ? "piapi" : capability === "video" ? "video" : "image"} />
                         </Form.Item>
                     ) : null}
                     <Form.Item name="script" label={t("admin.channels.script")} extra={t("admin.channels.scriptHint")}>

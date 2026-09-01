@@ -1,3 +1,5 @@
+import { PIAPI_ASPECT_RATIOS } from "@/lib/aspect-presets";
+
 /** Seedream 5 task types exposed through PiAPI's unified `POST /api/v1/task` endpoint. */
 export const PIAPI_SEEDREAM_TASK_TYPES = ["seedream-5-lite", "seedream-5-lite-less-restriction", "seedream-5-pro", "seedream-5-pro-less-restriction"] as const;
 
@@ -14,7 +16,6 @@ export const PIAPI_MODEL_NAME = "seedream";
 export const PIAPI_MAX_REFERENCE_IMAGES = 10;
 export const PIAPI_BASE_URL = "https://api.piapi.ai";
 
-const PIAPI_ASPECT_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "4:5", "5:4", "21:9"];
 const LITE_SIZES = ["2K", "3K"];
 const PRO_SIZES = ["1K", "2K"];
 const SIZE_ORDER = ["1K", "2K", "3K"];

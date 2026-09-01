@@ -14,12 +14,12 @@ import {
     PIAPI_MAX_REFERENCE_IMAGES,
     piapiSeedreamInput,
 } from "./piapi-references";
+import { PIAPI_ASPECT_RATIOS } from "../../pricing/aspect-presets";
 import { ProviderAdapter, type GeneratedBinary, type GenerationOutput, type GenerationRequest, type ProviderCredentials, type ReferenceInput } from "./provider.types";
 
 const POLL_INTERVAL_MS = 2500;
 const POLL_TIMEOUT_MS = 300_000;
 const OUTPUT_FORMAT = "png";
-const PIAPI_ASPECT_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "4:5", "5:4", "21:9"];
 const LITE_SIZES = ["2K", "3K"];
 const PRO_SIZES = ["1K", "2K"];
 const SIZE_ORDER = ["1K", "2K", "3K"];

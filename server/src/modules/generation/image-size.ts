@@ -1,5 +1,5 @@
 import { badRequest } from "../../common/errors";
-import { defaultAspectPresets, parsePixelSize, presetSizeForQuality, type AspectPreset } from "../pricing/aspect-presets";
+import { defaultAspectPresets, parsePixelSize, presetSizeForQuality, tierFromPixelSize, type AspectPreset } from "../pricing/aspect-presets";
 
 /**
  * Fallback sizing when a request uses a ratio the model has not given an explicit pixel table for.
@@ -116,28 +116,24 @@ export function closestGeminiAspectRatio(value: string) {
 }
 
 export function geminiImageSize(quality: string | undefined, dimensions: { width: number; height: number } | null) {
-    if (dimensions) {
-        const longest = Math.max(dimensions.width, dimensions.height);
-        if (longest > 2560) return "4K";
-        return longest > 1280 ? "2K" : "1K";
-    }
     const normalized = normalizeQuality(quality);
-    return normalized ? GEMINI_IMAGE_SIZE_BY_QUALITY[normalized] : undefined;
+    if (normalized) return GEMINI_IMAGE_SIZE_BY_QUALITY[normalized];
+    if (dimensions) return tierFromPixelSize(dimensions.width, dimensions.height);
+    return undefined;
 }
 
-/** The size string used to look up a spec price, so billing tiers match what we actually request. */
+/**
+ * Price lookup key. The user-selected 1K/2K/4K quality is authoritative — never infer from a
+ * longest-edge 1280/2560 cutoff (1K 16:9 is 1424px, 2K 16:9 is 2816px). Custom WxH maps onto
+ * native preset pixels, then Seedream area bands. Ratio + auto quality uses the model's default spec.
+ */
 export function pricingSpec(quality: string | undefined, size: string | undefined, presets?: AspectPreset[]) {
     const normalized = normalizeQuality(quality);
     if (normalized === "high") return "4K";
     if (normalized === "medium" || normalized === "hd") return "2K";
     if (normalized === "low" || normalized === "standard") return "1K";
-    const resolved = resolveRequestSize(normalized, size, presets);
-    if (resolved) {
-        const dimensions = parseImageDimensions(resolved)!;
-        const longest = Math.max(dimensions.width, dimensions.height);
-        if (longest > 2560) return "4K";
-        if (longest > 1280) return "2K";
-        return "1K";
-    }
+    const value = (size ?? "").trim();
+    const dimensions = parseImageDimensions(value);
+    if (dimensions) return tierFromPixelSize(dimensions.width, dimensions.height, presets ?? defaultAspectPresets());
     return undefined;
 }
