@@ -1,0 +1,19 @@
+{
+  "name": "piapi-auto-register",
+  "version": "2.0.0",
+  "private": true,
+  "description": "PiAPI Google OAuth auto-registration system",
+  "scripts": {
+    "up": "docker compose up -d --build",
+    "down": "docker compose down",
+    "logs": "docker compose logs -f",
+    "restart": "docker compose restart",
+    "rebuild": "docker compose build --no-cache && docker compose up -d",
+    "nuke": "docker compose down -v",
+    "typecheck": "npm --prefix server run typecheck && npm --prefix client run typecheck",
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev"
+  },
+  "keywords": ["piapi", "automation", "google-oauth", "playwright"],
+  "license": "MIT"
+}

@@ -1,0 +1,99 @@
+# 生产编排：一套 compose，五个进程（nginx 静态前端 + API + worker + Postgres + Redis）。
+# API 与 worker 必须拆开：视频任务的上游轮询可能持续很久，不能占满 HTTP 进程。
+# 首次启动前必须准备 .env（参考 .env.example），至少设置 APP_ENCRYPTION_KEY 与 POSTGRES_PASSWORD。
+# 不要同时再启动 server/docker-compose.dev.yml：那份文件只给「在宿主机跑 npm run dev」用。
+name: infinite-canvas
+
+services:
+    web:
+        image: ghcr.io/basketikun/infinite-canvas:latest
+        container_name: infinite-canvas-web
+        depends_on:
+            api:
+                condition: service_healthy
+        ports:
+            - "${WEB_PORT:-3000}:3000"
+        volumes:
+            # nginx 通过 X-Accel-Redirect 直接发文件，必须与 api 共享同一份存储。
+            - storage:/data/storage:ro
+        restart: unless-stopped
+        # 统计分析（可选，默认关闭）。每家一个独立变量，填了谁就启用谁：
+        # environment:
+        #   ANALYTICS_GA4_ID: G-XXXXXXXXXX
+        #   ANALYTICS_BAIDU_ID: xxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+    api:
+        image: ghcr.io/basketikun/infinite-canvas-server:latest
+        container_name: infinite-canvas-api
+        depends_on:
+            postgres:
+                condition: service_healthy
+            redis:
+                condition: service_healthy
+        environment: &server_env
+            NODE_ENV: production
+            PORT: 4000
+            DATABASE_URL: postgres://infinite:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/infinite_canvas
+            REDIS_URL: redis://redis:6379
+            APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY:?set APP_ENCRYPTION_KEY to 32 random bytes}
+            APP_ENCRYPTION_KEY_ID: ${APP_ENCRYPTION_KEY_ID:-k1}
+            SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-true}
+            STORAGE_LOCAL_ROOT: /data/storage
+            STORAGE_INTERNAL_PREFIX: /internal-files
+            GENERATION_WORKER_CONCURRENCY: ${GENERATION_WORKER_CONCURRENCY:-4}
+            GENERATION_MAX_ACTIVE_PER_USER: ${GENERATION_MAX_ACTIVE_PER_USER:-3}
+            LOG_LEVEL: ${LOG_LEVEL:-info}
+        volumes:
+            - storage:/data/storage
+        # 迁移在 API 启动前执行一次；worker 不重复执行，避免并发加锁。
+        command: ["sh", "-c", "node dist/db/migrate.js && node dist/main.js"]
+        restart: unless-stopped
+
+    worker:
+        image: ghcr.io/basketikun/infinite-canvas-server:latest
+        container_name: infinite-canvas-worker
+        depends_on:
+            api:
+                condition: service_healthy
+        environment: *server_env
+        volumes:
+            - storage:/data/storage
+        command: ["node", "dist/worker.js"]
+        # Same image as api, but this process does not listen on :4000.
+        healthcheck:
+            disable: true
+        restart: unless-stopped
+
+    postgres:
+        image: postgres:16-alpine
+        container_name: infinite-canvas-postgres
+        environment:
+            POSTGRES_USER: infinite
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+            POSTGRES_DB: infinite_canvas
+        volumes:
+            - postgres:/var/lib/postgresql/data
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U infinite -d infinite_canvas"]
+            interval: 10s
+            timeout: 5s
+            retries: 10
+        restart: unless-stopped
+
+    redis:
+        image: redis:7-alpine
+        container_name: infinite-canvas-redis
+        command: ["redis-server", "--appendonly", "yes"]
+        volumes:
+            - redis:/data
+        healthcheck:
+            test: ["CMD", "redis-cli", "ping"]
+            interval: 10s
+            timeout: 5s
+            retries: 10
+        restart: unless-stopped
+
+volumes:
+    postgres:
+    redis:
+    storage:

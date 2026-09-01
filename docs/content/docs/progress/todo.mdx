@@ -1,0 +1,20 @@
+---
+title: TODO
+description: Planned follow-up work
+---
+
+# TODO
+
+- Payment gateways: the `orders` table already carries a `payment_provider` column and the wallet top-up modal reserves space for online payment, so adding WeChat Pay or Alipay needs no schema change. Today the only ways money enters a wallet are redeem cards and admin adjustments.
+- Registration abuse controls: only IP-based rate limiting on sign-up and sign-in exists. There is no captcha, email verification or device fingerprinting, all of which are required before enabling the new-user gift balance.
+- PiAPI image-to-image still needs a public image host: `image_urls` accepts only public http(s) URLs, rejects `data:` URIs, and PiAPI's own `upload.theapi.app` sends no CORS headers. The server currently rejects PiAPI requests that carry reference images with an explicit message.
+- PiAPI pool follow-up: balances are calibrated on import, manual refresh and after each successful generation, with no scheduled sweep. Larger pools may need a concurrency cap and a refresh schedule.
+- Workbench history is still a browser-local cache: the authoritative record lives server-side (My wallet usage history and the admin generations page), but the history list in the image and video studios still reads localforage, so it does not follow the user across devices.
+- Storage migration tooling: the admin area can switch between local disk and S3, but the switch only affects new files. Existing files are not moved and need a background migration job.
+- Canvas collaboration: conflicts are handled with a `version` optimistic lock that asks the user to reload. Simultaneous editing of one canvas from several devices deserves incremental patches or field-level merging.
+- Local Agent follow-up: upgrade the Claude Code CLI adapter to the Claude Agent SDK adapter per the integration plan and improve the tool queue.
+- First-party Agent: chrome is now toggled from admin Services (default on). Keep Agent code; still replace local Codex setup with a first-party Agent API later.
+- Canvas node-plugin chrome is hidden behind `NODE_PLUGIN_UI_ENABLED`. Re-enable it only after the plugin product is ready; do not delete plugin loader, host, or node code.
+- Local Agent and server-side billing: the agent's generation tools now go through the billed server API. The protocol version needs to move from 6 to 7 and the panel should surface insufficient balance.
+- Agent Skills follow-up: add installation from web search, Skill resource-file management and controlled local-memory persistence.
+- Canvas plugins are still dynamically imported from arbitrary remote URLs. For a commercial deployment this should be restricted to an admin-registered allowlist.

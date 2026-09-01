@@ -1,0 +1,20 @@
+{
+  "proxyPool": {
+    "enabled": false,
+    "strategy": "per-account",
+    "entries": [
+      {
+        "id": "thordata-sticky",
+        "label": "Thordata 住宅 · 粘性 30 分钟",
+        "url": "http://__USER__-sessid-{session}-sesstime-30:__PASS__@__GATEWAY__",
+        "enabled": true
+      },
+      {
+        "id": "thordata-rotating",
+        "label": "Thordata 住宅 · 每请求轮换（备用，默认关闭）",
+        "url": "http://__USER__:__PASS__@__GATEWAY__",
+        "enabled": false
+      }
+    ]
+  }
+}

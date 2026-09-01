@@ -1,0 +1,58 @@
+# 只启动本地开发所需的依赖服务；API 与 worker 用 npm run dev / dev:worker 在宿主机跑。
+# 不要和仓库根目录的 docker-compose.yml 同时启动，否则会出现两套 Postgres / Redis。
+# 端口特意避开常用值，防止和机器上已有的 Postgres / Redis 冲突。
+services:
+    postgres:
+        image: postgres:16-alpine
+        container_name: infinite-canvas-dev-postgres
+        environment:
+            POSTGRES_USER: infinite
+            POSTGRES_PASSWORD: infinite
+            POSTGRES_DB: infinite_canvas
+        ports:
+            - "5442:5432"
+        volumes:
+            - dev-postgres:/var/lib/postgresql/data
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U infinite -d infinite_canvas"]
+            interval: 5s
+            timeout: 5s
+            retries: 20
+
+    redis:
+        image: redis:7-alpine
+        container_name: infinite-canvas-dev-redis
+        command: ["redis-server", "--appendonly", "yes"]
+        ports:
+            - "6389:6379"
+        volumes:
+            - dev-redis:/data
+        healthcheck:
+            test: ["CMD", "redis-cli", "ping"]
+            interval: 5s
+            timeout: 5s
+            retries: 20
+
+    # S3 兼容存储，用于验证 s3 驱动；默认存储策略仍是本机磁盘。
+    minio:
+        image: minio/minio:latest
+        container_name: infinite-canvas-dev-minio
+        command: ["server", "/data", "--console-address", ":9011"]
+        environment:
+            MINIO_ROOT_USER: infinite
+            MINIO_ROOT_PASSWORD: infinite123
+        ports:
+            - "9010:9000"
+            - "9011:9011"
+        volumes:
+            - dev-minio:/data
+        healthcheck:
+            test: ["CMD", "mc", "ready", "local"]
+            interval: 10s
+            timeout: 5s
+            retries: 20
+
+volumes:
+    dev-postgres:
+    dev-redis:
+    dev-minio:

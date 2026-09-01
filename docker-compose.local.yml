@@ -1,0 +1,20 @@
+# 从源码构建整套服务，其余配置继承 docker-compose.yml。
+# 用法：docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
+services:
+    web:
+        image: infinite-canvas:local
+        build:
+            context: .
+            dockerfile: Dockerfile
+
+    api:
+        image: infinite-canvas-server:local
+        build:
+            context: .
+            dockerfile: server/Dockerfile
+
+    worker:
+        image: infinite-canvas-server:local
+        build:
+            context: .
+            dockerfile: server/Dockerfile
