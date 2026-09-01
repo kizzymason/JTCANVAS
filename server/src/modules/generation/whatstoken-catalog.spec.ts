@@ -56,6 +56,7 @@ describe("WhatsToken catalog prices", () => {
     it("exposes 4K as 2160 on Pro and keeps fast/mini at 480/720", () => {
         const pro = WHATSTOKEN_VIDEO_MODELS.find((item) => item.name === "seedance-2-0-pro-NSFW")!;
         expect(whatsTokenVideoFeatures(pro).videoResolutions).toEqual(["480", "720", "1080", "2160"]);
+        expect(whatsTokenVideoFeatures(pro).aspectPresets.find((item) => item.ratio === "16:9")?.sizes["1K"]).toBe("1280x720");
         expect(whatsTokenVideoPriceRows(pro).some((row) => row.spec === "2160-video")).toBe(true);
 
         const mini = WHATSTOKEN_VIDEO_MODELS.find((item) => item.name === "seedance-2-0-mini-NSFW")!;

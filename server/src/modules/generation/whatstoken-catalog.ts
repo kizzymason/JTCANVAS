@@ -1,4 +1,5 @@
 import { money, mulMoney, toMoneyString } from "../../common/money";
+import { defaultVideoAspectPresets } from "../pricing/aspect-presets";
 import { parseModelFeatures, type ModelFeatures } from "../pricing/model-features";
 
 /** Upstream host used by the seeded OpenAI-compatible channel. */
@@ -156,6 +157,7 @@ export function whatsTokenVideoFeatures(model: WhatsTokenVideoModel): ModelFeatu
     return parseModelFeatures({
         videoResolutions: model.rates.map((rate) => String(rate.resolution)),
         maxSeconds: model.maxSeconds,
+        aspectPresets: defaultVideoAspectPresets(),
     });
 }
 

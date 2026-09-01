@@ -126,7 +126,7 @@ export class AspectPresetDto {
     @MaxLength(32)
     label?: string;
 
-    @ApiPropertyOptional({ description: "1K/2K/4K 像素，例如 1280x720。缺省档位按 1K 的 2×/4× 补齐" })
+    @ApiPropertyOptional({ description: "1K/2K/4K 像素，例如 1424x800。缺省档位按该比例官方像素补齐，不是 1K 翻倍" })
     @IsOptional()
     @IsObject()
     sizes?: Record<string, string>;

@@ -1,4 +1,5 @@
 import { mulMoney, toMoneyString } from "../../common/money";
+import { piapiAspectPresets } from "../pricing/aspect-presets";
 import { parseModelFeatures, type ModelFeatures } from "../pricing/model-features";
 
 /** Upstream host used by the PiAPI adapter and the seeded channel. */
@@ -68,10 +69,12 @@ export function piapiSeedFeatures(model: PiapiSeedreamModel): ModelFeatures {
     if (specs.includes("1K")) resolutions.push("1K");
     if (specs.includes("2K")) resolutions.push("2K");
     if (specs.includes("3K") || specs.includes("4K")) resolutions.push("4K");
+    const kind = model.name.includes("lite") ? "lite" : "pro";
     return parseModelFeatures({
         resolutions,
         maxCount: 1,
         supportsTransparent: false,
+        aspectPresets: piapiAspectPresets(kind),
     });
 }
 
