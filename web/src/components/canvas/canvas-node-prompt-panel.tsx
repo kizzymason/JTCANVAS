@@ -6,6 +6,8 @@ import { useTranslation } from "react-i18next";
 import { ModelPicker } from "@/components/model-picker";
 import { PriceEstimate } from "@/components/price-estimate";
 import { pricingSpecFor } from "@/lib/pricing-spec";
+import { videoPricingSpecFor } from "@/lib/video-pricing-spec";
+import { connectedHasVideoReference } from "@/lib/canvas/canvas-resource-references";
 import { defaultConfig, resolveModelForCapability, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -131,7 +133,7 @@ export function CanvasNodePromptPanel({ node, nodes, isRunning, onPromptChange, 
                     model={config.model}
                     count={mode === "image" ? Number(config.count) || 1 : 1}
                     seconds={mode === "video" ? Math.max(1, Number(config.videoSeconds) || 1) : undefined}
-                    spec={mode === "image" ? pricingSpecFor(config.quality, config.size) : undefined}
+                    spec={mode === "image" ? pricingSpecFor(config.quality, config.size) : mode === "video" ? videoPricingSpecFor(config.vquality, connectedHasVideoReference(connectedNodes, nodes)) : undefined}
                     referenceCount={connectedNodes.length}
                 />
                 <Button

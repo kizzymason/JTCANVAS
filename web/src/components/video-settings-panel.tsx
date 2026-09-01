@@ -8,6 +8,8 @@ import { modelFeaturesOf } from "@/lib/model-features";
 import { type AiConfig } from "@/stores/use-config-store";
 import { normalizeModelOptionValue } from "@/stores/use-config-store";
 import { useModelStore } from "@/stores/use-model-store";
+import { hasVideoInputPricing, videoPricingSpecFor } from "@/lib/video-pricing-spec";
+import { formatMoney } from "@/services/api/models";
 
 const defaultResolutionOptions = [
     { value: "720", label: "720p" },
@@ -46,7 +48,7 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
     const features = useMemo(() => modelFeaturesOf(selectedModel), [selectedModel]);
     const resolutionOptions = useMemo(() => {
         const values = features.videoResolutions.length ? features.videoResolutions : defaultResolutionOptions.map((item) => item.value);
-        return values.map((value) => ({ value, label: `${value}p` }));
+        return values.map((value) => ({ value, label: value === "2160" ? "4K" : `${value}p` }));
     }, [features.videoResolutions]);
     const visibleSecondOptions = secondOptions.filter((value) => value <= features.maxSeconds);
     const seconds = String(Math.min(features.maxSeconds, Math.max(1, Number(config.videoSeconds) || 6)));
@@ -56,6 +58,12 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
         const current = normalizeVideoResolutionValue(config.vquality);
         return resolutionOptions.some((item) => item.value === current) ? current : resolutionOptions[0]?.value || current;
     }, [config.vquality, resolutionOptions]);
+    const videoRates = useMemo(() => {
+        if (!selectedModel || selectedModel.billingMode !== "per_second" || !hasVideoInputPricing(selectedModel.specPrices)) return null;
+        const without = selectedModel.specPrices[videoPricingSpecFor(resolution, false)] ?? selectedModel.unitPrice;
+        const withVideo = selectedModel.specPrices[videoPricingSpecFor(resolution, true)] ?? without;
+        return { without: formatMoney(without), with: formatMoney(withVideo) };
+    }, [resolution, selectedModel]);
     const updateDimension = (key: "width" | "height", value: number | null) => {
         const next = Math.max(1, Math.floor(value || dimensions[key] || 720));
         onConfigChange("size", `${key === "width" ? next : dimensions.width}x${key === "height" ? next : dimensions.height}`);
@@ -79,6 +87,11 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
                             </OptionPill>
                         ))}
                     </div>
+                    {videoRates ? (
+                        <div className="text-[11px] leading-4 opacity-70">
+                            {t("pricing.videoRateHint", { without: videoRates.without, with: videoRates.with })}
+                        </div>
+                    ) : null}
                 </SettingGroup>
                 <SettingGroup title={t("settingsPanels.video.size")} color={theme.node.muted}>
                     <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2.5">
@@ -123,7 +136,8 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
 }
 
 export function videoResolutionLabel(value: string) {
-    return `${normalizeVideoResolutionValue(value)}p`;
+    const resolution = normalizeVideoResolutionValue(value);
+    return resolution === "2160" ? "4K" : `${resolution}p`;
 }
 
 export function videoSizeLabel(value: string) {
@@ -147,6 +161,7 @@ export function normalizeVideoSizeValue(value: string) {
 export function normalizeVideoResolutionValue(value: string) {
     if (value === "480p" || value === "low") return "480";
     if (value === "720p" || value === "auto" || value === "high" || value === "medium") return "720";
+    if (value === "4k" || value === "4K" || value === "2160p") return "2160";
     return value.replace(/p$/i, "") || "720";
 }
 

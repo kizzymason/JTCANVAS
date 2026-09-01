@@ -14,6 +14,7 @@ import { formatBytes, formatDuration } from "@/lib/image-utils";
 import { resolveMediaUrl } from "@/services/file-storage";
 import { resolveImageUrl, uploadImage } from "@/services/image-storage";
 import { PriceEstimate, useCanAffordGeneration } from "@/components/price-estimate";
+import { videoPricingSpecFor } from "@/lib/video-pricing-spec";
 import { createVideoGenerationTask, pollVideoGenerationTask, storeGeneratedVideo, type VideoGenerationTask } from "@/services/api/video";
 import { ApiError } from "@/services/api/client";
 import { useAssetStore } from "@/stores/use-asset-store";
@@ -104,7 +105,8 @@ export default function VideoPage() {
     const canGenerate = Boolean(prompt.trim());
     // Video bills per second, so the estimate scales with the configured duration.
     const videoSeconds = Math.max(1, Number(effectiveConfig.videoSeconds) || 1);
-    const { affordable } = useCanAffordGeneration(model, { seconds: videoSeconds, count: 1 });
+    const videoSpec = videoPricingSpecFor(effectiveConfig.vquality, false);
+    const { affordable } = useCanAffordGeneration(model, { seconds: videoSeconds, count: 1, spec: videoSpec });
 
     useEffect(() => {
         if (!running || !startedAt) return;
@@ -456,7 +458,7 @@ export default function VideoPage() {
 
                         <div className="mt-auto pt-6">
                             <div className="mb-2 flex justify-end">
-                                <PriceEstimate model={model} seconds={videoSeconds} count={1} />
+                                <PriceEstimate model={model} seconds={videoSeconds} count={1} spec={videoSpec} />
                             </div>
                             <Button type="primary" size="large" block icon={<Sparkles className="size-4" />} loading={running} disabled={!canGenerate || running || !affordable} onClick={() => void generate()}>
                                 {t("workbench.generate")}

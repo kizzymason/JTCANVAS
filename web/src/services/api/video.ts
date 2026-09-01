@@ -2,8 +2,7 @@ import i18n from "@/i18n";
 import { fileUrl } from "@/services/api/files";
 import { modelOptionName, type AiConfig } from "@/stores/use-config-store";
 import { useAuthStore } from "@/stores/use-auth-store";
-import type { ReferenceImage } from "@/types/image";
-import { ensureReferenceKeys } from "./reference-upload";
+import { ensureReferenceKeys, type ReferenceUploadSource } from "./reference-upload";
 import { fetchTask, submitGeneration, waitForTask, type GenerationTask } from "./generation";
 import { toFriendlyError } from "./image";
 
@@ -16,7 +15,7 @@ export type VideoGenerationTaskState = { status: "pending" } | { status: "comple
 
 type RequestOptions = { signal?: AbortSignal; source?: string };
 
-export async function requestVideoGeneration(config: AiConfig, prompt: string, references: ReferenceImage[] = [], options?: RequestOptions): Promise<VideoGenerationResult> {
+export async function requestVideoGeneration(config: AiConfig, prompt: string, references: ReferenceUploadSource[] = [], options?: RequestOptions): Promise<VideoGenerationResult> {
     const task = await createVideoGenerationTask(config, prompt, references, options);
     const finished = await waitForTask(task.id, { signal: options?.signal });
     void useAuthStore.getState().refreshWallet();
@@ -26,7 +25,7 @@ export async function requestVideoGeneration(config: AiConfig, prompt: string, r
     return state.result;
 }
 
-export async function createVideoGenerationTask(config: AiConfig, prompt: string, references: ReferenceImage[] = [], options?: RequestOptions): Promise<VideoGenerationTask> {
+export async function createVideoGenerationTask(config: AiConfig, prompt: string, references: ReferenceUploadSource[] = [], options?: RequestOptions): Promise<VideoGenerationTask> {
     const model = config.model || config.videoModel;
     if (!modelOptionName(model).trim()) throw new Error(apiText("videoModelRequired"));
 

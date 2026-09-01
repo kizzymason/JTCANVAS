@@ -146,7 +146,7 @@ export class GenerationProcessor extends WorkerHost {
         for (const storageKey of storageKeys) {
             const file = await this.storage.findByStorageKey(userId, storageKey);
             if (!file) continue;
-            references.push({ storageKey, mimeType: file.mimeType, fileName: `${storageKey.replace(/[^a-zA-Z0-9]/g, "_")}.png`, body: await this.storage.read(file) });
+            references.push({ storageKey, mimeType: file.mimeType, fileName: fileNameFor(storageKey, file.mimeType), body: await this.storage.read(file) });
         }
         return references;
     }
@@ -175,4 +175,11 @@ export class GenerationProcessor extends WorkerHost {
     private publishStatus(taskId: string, status: string, error?: string) {
         return this.redis.publish(statusChannel(taskId), JSON.stringify({ status, error: error ?? "" }));
     }
+}
+
+function fileNameFor(storageKey: string, mimeType: string) {
+    const safe = storageKey.replace(/[^a-zA-Z0-9]/g, "_");
+    const value = mimeType.toLowerCase();
+    const ext = value.startsWith("video/") ? "mp4" : value.startsWith("audio/") ? "mp3" : value.includes("jpeg") ? "jpg" : value.includes("webp") ? "webp" : "png";
+    return `${safe}.${ext}`;
 }
