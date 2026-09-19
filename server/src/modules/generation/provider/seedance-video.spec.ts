@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
     SEEDANCE_CREATE_PATHS,
+    friendlySeedanceError,
     seedanceCreateBody,
     seedanceResolution,
     seedanceStatusPaths,
     videoResultUrl,
     videoTaskId,
+    videoUsageTokens,
 } from "./seedance-video";
 
 describe("Seedance WhatsToken paths", () => {
@@ -21,6 +23,33 @@ describe("Seedance WhatsToken paths", () => {
         expect(seedanceResolution("2160")).toBe("4k");
         expect(seedanceResolution("4K")).toBe("4k");
         expect(seedanceResolution("")).toBe("720p");
+        expect(seedanceResolution("480")).toBe("480p");
+        expect(seedanceResolution("480p")).toBe("480p");
+        expect(seedanceResolution("720")).toBe("720p");
+    });
+
+    it("sends 480p UI choices as 480p so token volume matches the 480p price row", () => {
+        const body = seedanceCreateBody({
+            model: "seedance-2-0-pro-NSFW",
+            prompt: "walk",
+            seconds: 12,
+            resolution: "480",
+        });
+        expect(body.resolution).toBe("480p");
+        expect(body.size).toBe("480p");
+        expect(body.metadata).toMatchObject({ resolution: "480p" });
+    });
+
+    it("maps copyright-audio failures to a Chinese retry hint", () => {
+        expect(friendlySeedanceError("The request failed because the output audio may be related to copyright restrictions. Request id: 1")).toBe(
+            "生成失败：输出音频可能涉及版权限制。请关闭「生成声音」后重试，或更换提示词。",
+        );
+    });
+
+    it("maps invalid r2v duration to a Chinese retry hint", () => {
+        expect(
+            friendlySeedanceError("the parameter duration specified in the request is not valid for model dreamina-seedance-2-0-fast in r2v Request id: 1"),
+        ).toBe("该模型最低生成时长4S");
     });
 
     it("sends prompt, explicit generate_audio, and a text content item", () => {
@@ -60,5 +89,12 @@ describe("Seedance WhatsToken paths", () => {
             "https://cdn.example/out.mp4",
         );
         expect(videoResultUrl({ url: "https://cdn.example/direct.mp4" })).toBe("https://cdn.example/direct.mp4");
+        // MiniMax on this relay answers with a list rather than a single object.
+        expect(videoResultUrl({ status: "completed", data: [{ url: "https://cdn.example/list.mp4" }] })).toBe("https://cdn.example/list.mp4");
+        expect(videoResultUrl({ status: "completed", data: [] })).toBe("");
+        expect(videoUsageTokens({ usage: { completion_tokens: 120946, total_tokens: 120946 } })).toBe(120946);
+        expect(videoUsageTokens({ data: { usage: { output_tokens: "100858" } } })).toBe(100858);
+        expect(videoUsageTokens({ data: [{ usage: { completion_tokens: 130196 } }] })).toBe(130196);
+        expect(videoUsageTokens({ status: "succeeded" })).toBeUndefined();
     });
 });

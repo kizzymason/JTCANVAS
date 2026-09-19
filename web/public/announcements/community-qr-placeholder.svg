@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 240 240" role="img" aria-label="QR placeholder">
+  <rect width="240" height="240" fill="#f5f5f4"/>
+  <rect x="16" y="16" width="208" height="208" fill="#fff" stroke="#d6d3d1" stroke-width="2"/>
+  <g fill="#1c1917">
+    <rect x="32" y="32" width="56" height="56"/>
+    <rect x="40" y="40" width="40" height="40" fill="#fff"/>
+    <rect x="48" y="48" width="24" height="24"/>
+    <rect x="152" y="32" width="56" height="56"/>
+    <rect x="160" y="40" width="40" height="40" fill="#fff"/>
+    <rect x="168" y="48" width="24" height="24"/>
+    <rect x="32" y="152" width="56" height="56"/>
+    <rect x="40" y="160" width="40" height="40" fill="#fff"/>
+    <rect x="48" y="168" width="24" height="24"/>
+    <rect x="104" y="32" width="12" height="12"/>
+    <rect x="128" y="32" width="12" height="12"/>
+    <rect x="104" y="56" width="12" height="12"/>
+    <rect x="128" y="56" width="12" height="12"/>
+    <rect x="104" y="80" width="12" height="12"/>
+    <rect x="80" y="104" width="12" height="12"/>
+    <rect x="104" y="104" width="12" height="12"/>
+    <rect x="128" y="104" width="12" height="12"/>
+    <rect x="152" y="104" width="12" height="12"/>
+    <rect x="176" y="104" width="12" height="12"/>
+    <rect x="200" y="104" width="12" height="12"/>
+    <rect x="104" y="128" width="12" height="12"/>
+    <rect x="152" y="128" width="12" height="12"/>
+    <rect x="176" y="128" width="12" height="12"/>
+    <rect x="104" y="152" width="12" height="12"/>
+    <rect x="128" y="152" width="12" height="12"/>
+    <rect x="176" y="152" width="12" height="12"/>
+    <rect x="200" y="152" width="12" height="12"/>
+    <rect x="104" y="176" width="12" height="12"/>
+    <rect x="152" y="176" width="12" height="12"/>
+    <rect x="200" y="176" width="12" height="12"/>
+    <rect x="104" y="200" width="12" height="12"/>
+    <rect x="128" y="200" width="12" height="12"/>
+    <rect x="152" y="200" width="12" height="12"/>
+    <rect x="176" y="200" width="12" height="12"/>
+    <rect x="200" y="200" width="12" height="12"/>
+  </g>
+  <rect x="70" y="102" width="100" height="36" rx="4" fill="#fff" stroke="#d6d3d1"/>
+  <text x="120" y="125" text-anchor="middle" font-family="Segoe UI, PingFang SC, Microsoft YaHei, sans-serif" font-size="14" fill="#78716c">QR `M</text>
+</svg>

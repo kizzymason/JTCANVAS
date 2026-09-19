@@ -19,7 +19,15 @@ type AuthStore = {
     isAdmin: () => boolean;
 };
 
-const DEFAULT_SITE: SiteInfo = { siteName: "景甜Canvas AI创作画布", registrationEnabled: true, rechargeNotice: "", imageGenerationEnabled: true, videoGenerationEnabled: true, agentEnabled: true };
+const DEFAULT_SITE: SiteInfo = {
+    siteName: "景甜Canvas AI创作画布",
+    registrationEnabled: true,
+    rechargeNotice: "",
+    imageGenerationEnabled: true,
+    videoGenerationEnabled: true,
+    agentEnabled: true,
+    openPlatformEnabled: true,
+};
 
 export const useAuthStore = create<AuthStore>()((set, get) => ({
     ready: false,

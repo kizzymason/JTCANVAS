@@ -82,5 +82,22 @@ export function configuration() {
             timeoutMs: int(process.env.SCRIPT_TIMEOUT_MS, 60_000),
             allowedHosts: list(process.env.SCRIPT_ALLOWED_HOSTS),
         },
+
+        /** Downstream-facing OpenAI-compatible API. */
+        openPlatform: {
+            /** Per-key fallbacks, used whenever a token leaves its own limit at 0. */
+            defaultRpm: int(process.env.OPENAPI_DEFAULT_RPM, 120),
+            defaultConcurrency: int(process.env.OPENAPI_DEFAULT_CONCURRENCY, 8),
+            /**
+             * `/v1/images/generations` is synchronous in the OpenAI protocol, so the request has to be
+             * held open until the task lands. Longer than the worker's own image timeout would only
+             * hold a socket open for nothing.
+             */
+            imageWaitTimeoutMs: int(process.env.OPENAPI_IMAGE_WAIT_TIMEOUT_MS, 5 * 60 * 1000),
+            /** Non-streaming chat still waits for the full completion. */
+            textWaitTimeoutMs: int(process.env.OPENAPI_TEXT_WAIT_TIMEOUT_MS, 10 * 60 * 1000),
+            /** Raw api_request_logs rows older than this are pruned by the maintenance job. */
+            logRetentionDays: int(process.env.OPENAPI_LOG_RETENTION_DAYS, 90),
+        },
     };
 }

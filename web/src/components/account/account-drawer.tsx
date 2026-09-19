@@ -11,6 +11,7 @@ import { WalletBalanceCard } from "@/components/account/wallet-balance-card";
 import { changePassword, fetchLedger, fetchOrders, type LedgerEntry, type OrderRecord } from "@/services/api/account";
 import { ApiError } from "@/services/api/client";
 import { fetchTasks, type GenerationTask } from "@/services/api/generation";
+import { taskProgressLabel } from "@/lib/task-progress";
 import { formatMoney } from "@/services/api/models";
 import { useAccountDrawerStore } from "@/stores/use-account-drawer-store";
 import { useAuthStore } from "@/stores/use-auth-store";
@@ -221,7 +222,7 @@ function UsagePanel() {
         { title: t("account.usage.time"), dataIndex: "createdAt", width: 170, render: (value: string) => new Date(value).toLocaleString() },
         { title: t("account.usage.capability"), dataIndex: "capability", width: 90, render: (value: string) => t(`settingsPanels.model.capabilities.${value}`) },
         { title: t("account.usage.model"), dataIndex: "modelName", ellipsis: true },
-        { title: t("account.usage.quantity"), width: 90, align: "right", render: (_value, task) => `${task.succeededCount}/${task.quantity}` },
+        { title: t("account.usage.quantity"), width: 110, align: "right", render: (_value, task) => taskProgressLabel(task) },
         { title: t("account.usage.status"), dataIndex: "status", width: 100, render: (value: string) => <Tag color={statusColor(value)}>{t(`account.taskStatus.${value}`)}</Tag> },
         { title: t("account.usage.cost"), width: 110, align: "right", render: (_value, task) => `¥${formatMoney(task.status === "pending" || task.status === "running" ? task.estimatedCost : task.actualCost)}` },
         { title: t("account.usage.error"), dataIndex: "error", ellipsis: true, render: (value: string) => (value ? <span className="text-xs text-red-500">{value}</span> : "-") },

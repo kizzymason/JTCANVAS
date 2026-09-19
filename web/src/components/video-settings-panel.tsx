@@ -17,7 +17,7 @@ const defaultResolutionOptions = [
     { value: "480", label: "480p" },
 ];
 
-const secondOptions = [6, 10, 12, 16, 20];
+const secondOptions = [5, 10, 15];
 
 export const videoResolutionOptions = defaultResolutionOptions.map((item) => ({ value: item.value, label: item.label }));
 export const videoSizeOptions = defaultAspectPresets().map((item) => ({ value: item.ratio, label: item.label }));
@@ -43,21 +43,24 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
         return values.map((value) => ({ value, label: value === "2160" ? "4K" : `${value}p` }));
     }, [features.videoResolutions]);
     const visibleSecondOptions = secondOptions.filter((value) => value <= features.maxSeconds);
-    const seconds = String(Math.min(features.maxSeconds, Math.max(1, Number(config.videoSeconds) || 6)));
+    const minSeconds = Math.min(features.minSeconds, features.maxSeconds);
+    const seconds = String(Math.min(features.maxSeconds, Math.max(minSeconds, Number(config.videoSeconds) || minSeconds)));
     const size = normalizeVideoSizeValue(config.size, features.aspectPresets);
     const selectedPreset = features.aspectPresets.find((item) => item.ratio === size);
     const presetPixels = selectedPreset ? parsePixelSize(presetSizeForQuality(selectedPreset, "1K") || "") : null;
     const dimensions = readSizeDimensions(size, presetPixels);
     const resolution = useMemo(() => {
         const current = normalizeVideoResolutionValue(config.vquality);
-        return resolutionOptions.some((item) => item.value === current) ? current : resolutionOptions[0]?.value || current;
+        const preferred = resolutionOptions.find((item) => item.value === "720")?.value || resolutionOptions[0]?.value || current;
+        return resolutionOptions.some((item) => item.value === current) ? current : preferred;
     }, [config.vquality, resolutionOptions]);
     const videoRates = useMemo(() => {
         if (!selectedModel || selectedModel.billingMode !== "per_second" || !hasVideoInputPricing(selectedModel.specPrices)) return null;
-        const without = selectedModel.specPrices[videoPricingSpecFor(resolution, false)] ?? selectedModel.unitPrice;
-        const withVideo = selectedModel.specPrices[videoPricingSpecFor(resolution, true)] ?? without;
+        const without = selectedModel.specPrices[videoPricingSpecFor(resolution, false, selectedModel.modelName)] ?? selectedModel.unitPrice;
+        const withVideo = selectedModel.specPrices[videoPricingSpecFor(resolution, true, selectedModel.modelName)] ?? without;
         return { without: formatMoney(without), with: formatMoney(withVideo) };
     }, [resolution, selectedModel]);
+    const generateAudio = config.videoGenerateAudio === "true";
     const updateDimension = (key: "width" | "height", value: number | null) => {
         const next = Math.max(1, Math.floor(value || dimensions[key] || 720));
         onConfigChange("size", `${key === "width" ? next : dimensions.width}x${key === "height" ? next : dimensions.height}`);
@@ -65,14 +68,14 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
 
     useEffect(() => {
         if (resolution !== normalizeVideoResolutionValue(config.vquality)) onConfigChange("vquality", resolution);
-        const rawSeconds = Math.max(1, Number(config.videoSeconds) || 6);
-        if (rawSeconds > features.maxSeconds) onConfigChange("videoSeconds", String(features.maxSeconds));
+        const rawSeconds = Math.max(minSeconds, Number(config.videoSeconds) || minSeconds);
+        if (rawSeconds !== Number(config.videoSeconds) || rawSeconds > features.maxSeconds) onConfigChange("videoSeconds", String(Math.min(features.maxSeconds, rawSeconds)));
         const allowed = new Set(features.aspectPresets.map((item) => item.ratio));
         const isCustomPixels = /^\d+x\d+$/.test(size);
         if (!isCustomPixels && size !== "auto" && allowed.size && !allowed.has(size)) {
             onConfigChange("size", features.aspectPresets[0]?.ratio || "auto");
         }
-    }, [config.videoSeconds, config.vquality, features.aspectPresets, features.maxSeconds, onConfigChange, resolution, size]);
+    }, [config.videoSeconds, config.vquality, features.aspectPresets, features.maxSeconds, minSeconds, onConfigChange, resolution, size]);
 
     return (
         <ImageSettingsTheme theme={theme}>
@@ -129,8 +132,16 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
                                 {value}s
                             </OptionPill>
                         ))}
-                        <NumberInput value={seconds} min={1} max={features.maxSeconds} theme={theme} onChange={(value) => onConfigChange("videoSeconds", String(Math.min(features.maxSeconds, Math.max(1, Number(value) || 1))))} />
+                        <NumberInput value={seconds} min={minSeconds} max={features.maxSeconds} theme={theme} onChange={(value) => onConfigChange("videoSeconds", String(Math.min(features.maxSeconds, Math.max(minSeconds, Number(value) || minSeconds))))} />
                     </div>
+                </SettingGroup>
+                <SettingGroup title={t("settingsPanels.video.output")} color={theme.node.muted}>
+                    <div className="grid grid-cols-2 gap-2.5">
+                        <OptionPill selected={generateAudio} theme={theme} onClick={() => onConfigChange("videoGenerateAudio", generateAudio ? "false" : "true")}>
+                            {t("settingsPanels.video.generateAudio")}
+                        </OptionPill>
+                    </div>
+                    <div className="text-[11px] leading-4 opacity-70">{t("settingsPanels.video.generateAudioHint")}</div>
                 </SettingGroup>
             </div>
         </ImageSettingsTheme>
@@ -151,7 +162,7 @@ export function videoSizeLabel(value: string) {
 
 export function videoSecondsLabel(value: string) {
     if (String(value).trim() === "-1") return i18n.t("settingsPanels.video.smart");
-    return `${value || "6"}s`;
+    return `${value || "5"}s`;
 }
 
 export function normalizeVideoSizeValue(value: string, presets = defaultAspectPresets()) {

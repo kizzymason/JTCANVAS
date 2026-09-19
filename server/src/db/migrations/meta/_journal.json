@@ -29,6 +29,48 @@
       "when": 1788277240523,
       "tag": "0003_steep_tattoo",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788366205243,
+      "tag": "0004_boring_songbird",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1788419762840,
+      "tag": "0005_naive_mongoose",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788426298635,
+      "tag": "0006_aberrant_thanos",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788598886957,
+      "tag": "0007_misty_luckman",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788602720245,
+      "tag": "0008_cultured_amphibian",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1788609825249,
+      "tag": "0009_channel_commission",
+      "breakpoints": true
     }
   ]
 }

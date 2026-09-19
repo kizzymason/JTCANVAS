@@ -25,6 +25,7 @@ export type PublicModel = {
         aspectRatios: string[];
         aspectPresets?: Array<{ ratio: string; label: string; sizes: Partial<Record<"1K" | "2K" | "4K", string>> }>;
         videoResolutions: string[];
+        minSeconds?: number;
         maxSeconds: number;
     };
 };

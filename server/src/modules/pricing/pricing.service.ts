@@ -4,10 +4,23 @@ import Redis from "ioredis";
 import { DB, type Database } from "../../db/db.module";
 import { channelModels, channels, modelPrices } from "../../db/schema";
 import { badRequest, noUsableChannel } from "../../common/errors";
-import { ceilMoney, mulMoney, toMoneyString } from "../../common/money";
+import { ceilMoney, money, mulMoney, toMoneyString } from "../../common/money";
+import { seedanceCatalogSellCny } from "../generation/whatstoken-catalog";
 import { REDIS } from "../../redis/redis.module";
 import { parseModelFeatures } from "./model-features";
-import { decodeModelValue, encodeModelValue, type Capability, type EstimateRequest, type EstimateResult, type PublicModel } from "./pricing.types";
+import {
+    TOKEN_SPEC_INPUT,
+    TOKEN_SPEC_OUTPUT,
+    decodeModelValue,
+    encodeModelValue,
+    type Capability,
+    type EstimateOptions,
+    type EstimateRequest,
+    type EstimateResult,
+    type PublicModel,
+} from "./pricing.types";
+import { NEUTRAL_MULTIPLIER, applyMultiplier } from "./reseller-multiplier";
+import { tokenBucketCost } from "./token-pricing";
 
 const CACHE_KEY = "pricing:models:v2";
 const CACHE_TTL_SECONDS = 600;
@@ -61,6 +74,10 @@ export class PricingService {
             const base = list.find((item) => item.spec === null) ?? list[0];
             const specPrices: Record<string, string> = {};
             for (const item of list) if (item.spec) specPrices[item.spec] = item.unitPrice;
+            const tokenPrices = {
+                input: specPrices[TOKEN_SPEC_INPUT] ?? "0",
+                output: specPrices[TOKEN_SPEC_OUTPUT] ?? "0",
+            };
 
             models.push({
                 value: encodeModelValue(row.channelId, row.modelName),
@@ -70,10 +87,12 @@ export class PricingService {
                 capability: row.capability,
                 apiFormat: row.apiFormat,
                 billingMode: base.billingMode,
-                unitPrice: base.unitPrice,
+                // Token models price input and output separately; the input rate is the headline number.
+                unitPrice: base.billingMode === "per_token" ? tokenPrices.input : base.unitPrice,
                 extraReferencePrice: base.extraReferencePrice,
                 minCharge: base.minCharge,
                 specPrices,
+                tokenPrices,
                 features: parseModelFeatures(row.features),
             });
         }
@@ -95,17 +114,63 @@ export class PricingService {
     /**
      * Authoritative cost calculation. The frontend mirrors this for display, but the value the wallet
      * freezes always comes from here.
+     *
+     * `opts.multiplier` is the reseller coefficient. It is applied to the *final* amount, including the
+     * Seedance catalogue floor, so a discounted reseller cannot be silently pulled back up to list
+     * price by a fallback that only knows absolute CNY figures.
      */
-    async estimate(request: EstimateRequest): Promise<EstimateResult> {
+    async estimate(request: EstimateRequest, opts?: EstimateOptions): Promise<EstimateResult> {
         const model = await this.resolveModel(request.model);
+        const multiplier = opts?.multiplier ?? NEUTRAL_MULTIPLIER;
+        if (model.billingMode === "per_token") return this.estimateTokens(model, request, multiplier);
+
         const price = this.priceFor(model, request.spec);
         const quantity = this.quantityFor(model.billingMode, request);
 
         const referenceSurcharge = mulMoney(price.extraReferencePrice, Math.max(0, (request.referenceCount ?? 0) - 1));
         const raw = mulMoney(price.unitPrice, quantity).plus(referenceSurcharge);
-        const amount = ceilMoney(raw.lessThan(price.minCharge) ? price.minCharge : raw);
+        let amount = ceilMoney(applyMultiplier(raw.lessThan(price.minCharge) ? price.minCharge : raw, multiplier));
+        if (model.billingMode === "per_second") {
+            const catalogSell = seedanceCatalogSellCny(model.modelName, request.spec, request.seconds ?? 0, request.count ?? 1);
+            if (catalogSell) {
+                const scaled = ceilMoney(applyMultiplier(catalogSell, multiplier));
+                if (scaled.gt(amount)) amount = scaled;
+            }
+        }
 
-        return { model: request.model, billingMode: model.billingMode, unitPrice: price.unitPrice, quantity, amount: toMoneyString(amount) };
+        return {
+            model: request.model,
+            billingMode: model.billingMode,
+            unitPrice: toMoneyString(applyMultiplier(price.unitPrice, multiplier)),
+            quantity,
+            amount: toMoneyString(amount),
+            multiplier,
+        };
+    }
+
+    /**
+     * Text models bill on real usage, which is only known after the call. The freeze therefore uses the
+     * output ceiling rather than a guess: settlement can then only ever come out lower, which keeps it
+     * inside `WalletService.settle`'s "actual must not exceed frozen" rule.
+     */
+    private estimateTokens(model: PublicModel, request: EstimateRequest, multiplier: string): EstimateResult {
+        const inputTokens = Math.max(0, Math.floor(request.inputTokens ?? 0));
+        const maxOutputTokens = Math.max(0, Math.floor(request.maxOutputTokens ?? 0));
+        if (inputTokens + maxOutputTokens < 1) throw badRequest("TOKENS_REQUIRED", "按 token 计费的模型需要提供输入与输出上限");
+
+        const raw = tokenBucketCost(inputTokens, model.tokenPrices.input).plus(tokenBucketCost(maxOutputTokens, model.tokenPrices.output));
+        const floored = raw.lessThan(model.minCharge) ? money(model.minCharge) : raw;
+
+        return {
+            model: request.model,
+            billingMode: model.billingMode,
+            unitPrice: toMoneyString(applyMultiplier(model.tokenPrices.input, multiplier)),
+            quantity: inputTokens + maxOutputTokens,
+            amount: toMoneyString(ceilMoney(applyMultiplier(floored, multiplier))),
+            multiplier,
+            inputTokens,
+            maxOutputTokens,
+        };
     }
 
     /** Full resolution including the decryptable channel row; worker-only. */

@@ -5,14 +5,20 @@ import { isEmptyFeatures } from "../pricing/model-features";
 import {
     WHATSTOKEN_BASE_URL,
     WHATSTOKEN_CHANNEL_NAME,
+    WHATSTOKEN_DURATION_VIDEO_MODELS,
     WHATSTOKEN_IMAGE_MODELS,
+    WHATSTOKEN_TEXT_MODELS,
     WHATSTOKEN_VIDEO_MODELS,
+    whatsTokenDurationVideoFeatures,
+    whatsTokenDurationVideoPriceRows,
     whatsTokenImageFeatures,
     whatsTokenImagePriceRows,
+    whatsTokenTextPriceRows,
     whatsTokenVideoFeatures,
     whatsTokenVideoPriceRows,
     type WhatsTokenSeedPriceRow,
 } from "./whatstoken-catalog";
+import { parseModelFeatures } from "../pricing/model-features";
 
 export type WhatsTokenChannelSeedResult = {
     id: string;
@@ -21,6 +27,7 @@ export type WhatsTokenChannelSeedResult = {
     keyUpdated: boolean;
     modelsCreated: number;
     pricesInserted: number;
+    pricesUpdated: number;
 };
 
 export type WhatsTokenSeedCrypto = {
@@ -28,8 +35,10 @@ export type WhatsTokenSeedCrypto = {
 };
 
 /**
- * Idempotent: one WhatsToken OpenAI channel, Seedream image + Seedance video models, missing prices only.
- * Existing unit prices and API keys are left alone so an admin tweak survives a restart.
+ * Idempotent: one WhatsToken OpenAI channel, Seedream image + Seedance video models.
+ * Image unit prices and display names are left alone so an admin tweak survives a restart.
+ * Seedance video unit prices are rewritten from the encoder token formula (upstream $/M × 7.2 × 1.3)
+ * so per-second freeze stays aligned with WhatsToken token billing.
  */
 export async function seedWhatsTokenChannel(
     db: Database,
@@ -75,6 +84,7 @@ export async function seedWhatsTokenChannel(
 
         let modelsCreated = 0;
         let pricesInserted = 0;
+        let pricesUpdated = 0;
 
         for (const spec of WHATSTOKEN_IMAGE_MODELS) {
             const result = await ensureModel(tx, channel.id, {
@@ -83,24 +93,57 @@ export async function seedWhatsTokenChannel(
                 capability: "image",
                 features: whatsTokenImageFeatures(spec),
                 prices: whatsTokenImagePriceRows(spec),
+                enabled: spec.enabled,
+            });
+            modelsCreated += result.created ? 1 : 0;
+            pricesInserted += result.pricesInserted;
+        }
+
+        for (const spec of WHATSTOKEN_DURATION_VIDEO_MODELS) {
+            const result = await ensureModel(tx, channel.id, {
+                name: spec.name,
+                displayName: spec.displayName,
+                capability: "video",
+                features: whatsTokenDurationVideoFeatures(spec),
+                prices: whatsTokenDurationVideoPriceRows(spec),
+                enabled: spec.enabled,
+            });
+            modelsCreated += result.created ? 1 : 0;
+            pricesInserted += result.pricesInserted;
+        }
+
+        for (const spec of WHATSTOKEN_TEXT_MODELS) {
+            const result = await ensureModel(tx, channel.id, {
+                name: spec.name,
+                displayName: spec.displayName,
+                capability: "text",
+                features: parseModelFeatures({}),
+                prices: whatsTokenTextPriceRows(spec),
+                enabled: spec.enabled,
             });
             modelsCreated += result.created ? 1 : 0;
             pricesInserted += result.pricesInserted;
         }
 
         for (const spec of WHATSTOKEN_VIDEO_MODELS) {
-            const result = await ensureModel(tx, channel.id, {
-                name: spec.name,
-                displayName: spec.displayName,
-                capability: "video",
-                features: whatsTokenVideoFeatures(spec),
-                prices: whatsTokenVideoPriceRows(spec),
-            });
+            const result = await ensureModel(
+                tx,
+                channel.id,
+                {
+                    name: spec.name,
+                    displayName: spec.displayName,
+                    capability: "video",
+                    features: whatsTokenVideoFeatures(spec),
+                    prices: whatsTokenVideoPriceRows(spec),
+                },
+                true,
+            );
             modelsCreated += result.created ? 1 : 0;
             pricesInserted += result.pricesInserted;
+            pricesUpdated += result.pricesUpdated;
         }
 
-        return { id: channel.id, name: channel.name, created, keyUpdated, modelsCreated, pricesInserted };
+        return { id: channel.id, name: channel.name, created, keyUpdated, modelsCreated, pricesInserted, pricesUpdated };
     });
 }
 
@@ -110,10 +153,13 @@ async function ensureModel(
     spec: {
         name: string;
         displayName: string;
-        capability: "image" | "video";
+        capability: "image" | "video" | "text";
         features: Record<string, unknown>;
         prices: WhatsTokenSeedPriceRow[];
+        /** Only applied on insert; an admin's later toggle is never overwritten. */
+        enabled?: boolean;
     },
+    syncPrices = false,
 ) {
     let [model] = await tx
         .select()
@@ -130,7 +176,7 @@ async function ensureModel(
                 name: spec.name,
                 displayName: spec.displayName,
                 capability: spec.capability,
-                enabled: true,
+                enabled: spec.enabled ?? true,
                 features: spec.features,
             })
             .returning();
@@ -143,24 +189,41 @@ async function ensureModel(
             .returning();
     }
 
-    const existing = await tx.select({ spec: modelPrices.spec }).from(modelPrices).where(eq(modelPrices.channelModelId, model.id));
-    const have = new Set(existing.map((row) => row.spec ?? ""));
+    const existing = await tx.select().from(modelPrices).where(eq(modelPrices.channelModelId, model.id));
+    const bySpec = new Map(existing.map((row) => [row.spec ?? "", row]));
     let pricesInserted = 0;
+    let pricesUpdated = 0;
 
     for (const row of spec.prices) {
         const key = row.spec ?? "";
-        if (have.has(key)) continue;
-        await tx.insert(modelPrices).values({
-            channelModelId: model.id,
-            billingMode: row.billingMode,
-            spec: row.spec,
-            unitPrice: row.unitPrice,
-            extraReferencePrice: row.extraReferencePrice,
-            minCharge: "0.000000",
-        });
-        pricesInserted += 1;
-        have.add(key);
+        const current = bySpec.get(key);
+        if (!current) {
+            await tx.insert(modelPrices).values({
+                channelModelId: model.id,
+                billingMode: row.billingMode,
+                spec: row.spec,
+                unitPrice: row.unitPrice,
+                extraReferencePrice: row.extraReferencePrice,
+                minCharge: "0.000000",
+            });
+            pricesInserted += 1;
+            continue;
+        }
+        if (!syncPrices) continue;
+        if (current.unitPrice === row.unitPrice && current.billingMode === row.billingMode && current.extraReferencePrice === row.extraReferencePrice) {
+            continue;
+        }
+        await tx
+            .update(modelPrices)
+            .set({
+                unitPrice: row.unitPrice,
+                extraReferencePrice: row.extraReferencePrice,
+                billingMode: row.billingMode,
+                updatedAt: new Date(),
+            })
+            .where(eq(modelPrices.id, current.id));
+        pricesUpdated += 1;
     }
 
-    return { created, pricesInserted };
+    return { created, pricesInserted, pricesUpdated };
 }

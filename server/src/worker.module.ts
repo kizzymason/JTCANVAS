@@ -18,6 +18,11 @@ import { OpenAiAdapter } from "./modules/generation/provider/openai.adapter";
 import { PiapiAdapter } from "./modules/generation/provider/piapi.adapter";
 import { ProviderRegistry } from "./modules/generation/provider/provider.registry";
 import { MaintenanceService } from "./modules/maintenance/maintenance.service";
+import { MerchantCommissionService } from "./modules/cards/merchant-commission.service";
+import { MerchantService } from "./modules/cards/merchant.service";
+import { MerchantWebhookService } from "./modules/cards/merchant-webhook.service";
+import { ApiKeyService } from "./modules/openapi/api-key.service";
+import { UsageRecorderService } from "./modules/openapi/usage-recorder.service";
 import { PricingModule } from "./modules/pricing/pricing.module";
 import { SettingsModule } from "./modules/settings/settings.module";
 import { StorageModule } from "./modules/storage/storage.module";
@@ -58,6 +63,21 @@ import { WalletModule } from "./modules/wallet/wallet.module";
         StorageModule,
         PricingModule,
     ],
-    providers: [GenerationProcessor, ProviderRegistry, OpenAiAdapter, GeminiAdapter, PiapiAdapter, PiapiPoolService, ScriptRunnerService, MaintenanceService],
+    providers: [
+        GenerationProcessor,
+        ProviderRegistry,
+        OpenAiAdapter,
+        GeminiAdapter,
+        PiapiAdapter,
+        PiapiPoolService,
+        ScriptRunnerService,
+        MaintenanceService,
+        ApiKeyService,
+        UsageRecorderService,
+        // The maintenance cron reconciles channel commission and enforces the refund-rate guard.
+        MerchantService,
+        MerchantCommissionService,
+        MerchantWebhookService,
+    ],
 })
 export class WorkerModule {}

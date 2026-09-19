@@ -144,6 +144,70 @@ export class PaymentsService implements OnModuleInit {
         return this.frontendReturnUrl();
     }
 
+    /**
+     * Checkout for a purchase that is not a wallet top-up. The gateway mechanics (channel choice,
+     * secret decryption, signing) are identical, so they live here; the caller keeps its own order
+     * table and its own settlement rules, and nothing on this path touches a wallet.
+     */
+    async createExternalCheckout(params: {
+        orderNo: string;
+        amount: string;
+        productName: string;
+        method: PaymentMethod;
+        notifyPath: string;
+        returnPath: string;
+        clientIp: string;
+        userAgent: string;
+        channelId?: string;
+    }) {
+        const channel = await this.pickChannel(params.method, params.channelId);
+        const secret = this.decryptSecret(channel);
+        const gateway = this.gateways.resolve(channel.driver);
+        const checkout = await gateway.createCheckout({
+            gatewayUrl: channel.gatewayUrl,
+            merchantId: channel.merchantId,
+            secret,
+            method: params.method,
+            orderNo: params.orderNo,
+            money: formatMoney(params.amount),
+            name: params.productName,
+            notifyUrl: this.absoluteApiUrl(params.notifyPath),
+            returnUrl: this.absoluteApiUrl(params.returnPath),
+            clientIp: normalizeClientIp(params.clientIp),
+            cid: extraCid(channel.extra),
+            device: /mobile|android|iphone|ipad/i.test(params.userAgent) ? "mobile" : "pc",
+        });
+        return { channelId: channel.id, driver: channel.driver, payUrl: checkout.payUrl, qrcode: checkout.qrcode ?? "", img: checkout.img ?? "" };
+    }
+
+    /** Validates a gateway notification against the channel that issued the order. */
+    async verifyExternalNotify(params: Record<string, string>, channelId: string) {
+        const channel = await this.requireChannel(channelId);
+        const secret = this.decryptSecret(channel);
+        if (!this.gateways.resolve(channel.driver).verifyNotify(params, secret)) {
+            throw badRequest("PAYMENT_SIGN_INVALID", "支付签名校验失败");
+        }
+        if (params.pid && params.pid !== channel.merchantId) throw badRequest("PAYMENT_PID_MISMATCH", "商户号不匹配");
+        if (params.trade_status && params.trade_status !== "TRADE_SUCCESS") throw badRequest("PAYMENT_NOT_SUCCESS", "支付未成功");
+    }
+
+    /** Asks the gateway whether an order was paid; used when a notification never arrived. */
+    async queryExternalOrder(orderNo: string, channelId: string) {
+        const channel = await this.requireChannel(channelId);
+        const secret = this.decryptSecret(channel);
+        return this.gateways.resolve(channel.driver).queryOrder({
+            gatewayUrl: channel.gatewayUrl,
+            merchantId: channel.merchantId,
+            secret,
+            orderNo,
+        });
+    }
+
+    /** Payment methods a public page can offer, without leaking channel configuration. */
+    async publicMethods() {
+        return this.collectMethods(await this.listUsableChannels());
+    }
+
     async listAdminChannels() {
         const rows = await this.db.select().from(paymentChannels).orderBy(asc(paymentChannels.sortOrder), asc(paymentChannels.createdAt));
         return rows.map((row) => this.toAdminChannel(row));
@@ -436,9 +500,13 @@ export class PaymentsService implements OnModuleInit {
     }
 
     private callbackUrl(kind: "notify" | "return") {
-        const origin = this.publicOrigin();
+        return this.absoluteApiUrl(`payments/epay/${kind}`);
+    }
+
+    /** Gateways only accept absolute callback URLs, and they must sit under the API prefix. */
+    private absoluteApiUrl(path: string) {
         const prefix = this.config.get<string>("apiPrefix") || "api";
-        return `${origin}/${prefix}/payments/epay/${kind}`;
+        return `${this.publicOrigin()}/${prefix}/${path.replace(/^\/+/, "")}`;
     }
 
     private frontendReturnUrl() {

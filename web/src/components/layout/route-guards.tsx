@@ -48,14 +48,32 @@ export function RequireAdmin({ children }: { children: ReactNode }) {
     return <>{children}</>;
 }
 
+/**
+ * Guards the open-platform console. Admins carry reseller privileges implicitly so they can test and
+ * support the platform; anyone else is sent to the landing page where they can apply.
+ */
+export function RequireReseller({ children }: { children: ReactNode }) {
+    const ready = useAuthStore((state) => state.ready);
+    const user = useAuthStore((state) => state.user);
+    const services = useSiteServices();
+    const location = useLocation();
+
+    if (!ready) return <Loading />;
+    if (!user) return <UnauthenticatedHomeRedirect from={`${location.pathname}${location.search}`} />;
+    if (!services.openPlatformEnabled) return <Navigate to="/canvas" replace />;
+    if (user.role !== "reseller" && user.role !== "admin") return <Navigate to="/open" replace />;
+    return <>{children}</>;
+}
+
 /** Sends the user back to the canvas when an admin has turned the matching product surface off. */
-export function RequireSiteService({ service, children }: { service: "image" | "video"; children: ReactNode }) {
+export function RequireSiteService({ service, children }: { service: "image" | "video" | "openPlatform"; children: ReactNode }) {
     const ready = useAuthStore((state) => state.ready);
     const services = useSiteServices();
 
     if (!ready) return <Loading />;
     if (service === "image" && !services.imageEnabled) return <Navigate to="/canvas" replace />;
     if (service === "video" && !services.videoEnabled) return <Navigate to="/canvas" replace />;
+    if (service === "openPlatform" && !services.openPlatformEnabled) return <Navigate to="/canvas" replace />;
     return <>{children}</>;
 }
 

@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 
 import { ApiError } from "@/services/api/client";
 import { adminApi, type AdminTask } from "@/services/api/admin";
+import { taskProgressLabel } from "@/lib/task-progress";
 import { formatMoney } from "@/services/api/models";
 import { downloadCsv, fetchAllPages } from "../export-csv";
 import { useAdminTable } from "../use-admin-table";
@@ -44,7 +45,7 @@ export default function AdminTasksPage() {
                     item.username ?? "",
                     t(`settingsPanels.model.capabilities.${item.capability}`),
                     item.modelName,
-                    `${item.succeededCount}/${item.quantity}`,
+                    taskProgressLabel(item),
                     t(`account.taskStatus.${item.status}`),
                     item.estimatedCost,
                     item.actualCost,
@@ -63,7 +64,7 @@ export default function AdminTasksPage() {
         { title: t("admin.tasks.user"), dataIndex: "username", width: 140, ellipsis: true },
         { title: t("admin.tasks.capability"), dataIndex: "capability", width: 80, render: (value: string) => t(`settingsPanels.model.capabilities.${value}`) },
         { title: t("admin.tasks.model"), dataIndex: "modelName", ellipsis: true },
-        { title: t("admin.tasks.progress"), width: 90, align: "right", render: (_value, task) => `${task.succeededCount}/${task.quantity}` },
+        { title: t("admin.tasks.progress"), width: 110, align: "right", render: (_value, task) => taskProgressLabel(task) },
         { title: t("admin.tasks.status"), dataIndex: "status", width: 100, render: (value: string) => <Tag color={statusColor(value)}>{t(`account.taskStatus.${value}`)}</Tag> },
         { title: t("admin.tasks.estimated"), dataIndex: "estimatedCost", width: 100, align: "right", render: (value: string) => `¥${formatMoney(value)}` },
         { title: t("admin.tasks.actual"), dataIndex: "actualCost", width: 100, align: "right", render: (value: string) => `¥${formatMoney(value)}` },

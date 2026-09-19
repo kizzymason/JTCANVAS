@@ -135,11 +135,21 @@ export function AuthModal() {
                             <X className="size-4" />
                         </button>
 
-                        <div className="mb-6 pr-8 text-center">
-                            <h1 id="auth-modal-title" className="text-xl font-semibold text-stone-950 dark:text-stone-100">
-                                {site.siteName}
+                        <div className="mb-6 flex justify-center">
+                            <h1
+                                id="auth-modal-title"
+                                className="flex items-center gap-3 text-[28px] font-semibold leading-none tracking-[0.08em] text-stone-950 dark:text-stone-100"
+                            >
+                                <span
+                                    aria-hidden
+                                    className="size-[1.22em] shrink-0 bg-current"
+                                    style={{
+                                        mask: "url(/logo.svg) center / contain no-repeat",
+                                        WebkitMask: "url(/logo.svg) center / contain no-repeat",
+                                    }}
+                                />
+                                {t("topNav.brand")}
                             </h1>
-                            <p className="mt-2 text-sm text-stone-500">{t("auth.subtitle")}</p>
                         </div>
 
                         <SegmentedSwitch
@@ -216,8 +226,6 @@ export function AuthModal() {
                                 {t(mode === "register" ? "auth.registerAction" : "auth.loginAction")}
                             </Button>
                         </Form>
-
-                        <p className="mt-4 text-center text-xs text-stone-500">{t(mode === "register" ? "auth.registerHint" : "auth.loginHint")}</p>
                     </motion.div>
                 </div>
             ) : null}

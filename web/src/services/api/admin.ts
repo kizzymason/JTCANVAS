@@ -3,15 +3,26 @@ import type { BillingMode, ModelCapability } from "./models";
 
 export type AdminOverview = {
     users: { total: number; active: number };
-    wallet: { balance: string; frozen: string; spent: string };
-    tasks: { total: number; running: number; failed7d: number };
+    wallet: { balance: string; frozen: string; spent: string; recharged: string };
+    tasks: { total: number; running: number; failed7d: number; succeeded: number };
     revenue: string;
+    series: Array<{
+        date: string;
+        users: number;
+        tasks: number;
+        succeeded: number;
+        failed: number;
+        revenue: string;
+        spent: string;
+    }>;
+    tasksByStatus: Array<{ status: string; count: number }>;
+    tasksByCapability: Array<{ capability: string; count: number }>;
 };
 
 export type AdminUser = {
     id: string;
     username: string;
-    role: "user" | "admin";
+    role: "user" | "admin" | "reseller";
     status: "active" | "disabled";
     displayName: string;
     lastLoginAt: string | null;
@@ -151,15 +162,68 @@ export type SiteSettings = {
     imageGenerationEnabled: boolean;
     videoGenerationEnabled: boolean;
     agentEnabled: boolean;
+    openPlatformEnabled: boolean;
 };
 export type ServiceSettings = {
     imageGenerationEnabled: boolean;
     videoGenerationEnabled: boolean;
     agentEnabled: boolean;
+    openPlatformEnabled: boolean;
 };
 export type StorageSettings = {
     driver: "local" | "s3";
     s3: { endpoint: string; region: string; bucket: string; accessKeyId: string; forcePathStyle: boolean; publicBaseUrl: string; hasSecret?: boolean };
+};
+
+export type AdminResellerTier = {
+    id: string;
+    name: string;
+    /** Signed surcharge, e.g. "0.200000" for +20% or "-0.200000" for a 20% discount. */
+    multiplier: string;
+    description: string;
+    isDefault: boolean;
+    sortOrder: number;
+    createdAt: string;
+    resellerCount: number;
+};
+
+export type AdminResellerStatus = "pending" | "approved" | "rejected" | "suspended";
+
+export type AdminReseller = {
+    userId: string;
+    username: string;
+    userStatus: "active" | "disabled";
+    role: "user" | "admin" | "reseller";
+    status: AdminResellerStatus;
+    tierId: string | null;
+    tierName: string | null;
+    tierMultiplier: string | null;
+    multiplierOverride: string | null;
+    /** Resolved coefficient (1 + surcharge) after the override > tier > list-price precedence. */
+    multiplier: string;
+    companyName: string;
+    contactName: string;
+    contactPhone: string;
+    contactEmail: string;
+    website: string;
+    useCase: string;
+    expectedVolume: string;
+    rejectReason: string;
+    appliedAt: string;
+    reviewedAt: string | null;
+    keyCount: number;
+    requests: number;
+    billedAmount: string;
+};
+
+export type AdminResellerCounts = { pending: number; approved: number; rejected: number; suspended: number };
+
+export type UpsertResellerTierInput = {
+    name: string;
+    multiplier: string;
+    description?: string;
+    isDefault?: boolean;
+    sortOrder?: number;
 };
 
 export const adminApi = {
@@ -223,4 +287,17 @@ export const adminApi = {
     updateRechargePackage: (id: string, body: Record<string, unknown>) => apiPatch<{ id: string }>(`/admin/recharge-packages/${id}`, body),
     deleteRechargePackage: (id: string) => apiDelete<{ id: string }>(`/admin/recharge-packages/${id}`),
     saveRechargeSettings: (body: AdminRechargeSettings) => apiPatch<{ settings: AdminRechargeSettings }>("/admin/recharge-settings", body),
+
+    resellerTiers: () => apiGet<{ items: AdminResellerTier[] }>("/admin/resellers/tiers"),
+    createResellerTier: (body: UpsertResellerTierInput) => apiPost<{ tier: AdminResellerTier }>("/admin/resellers/tiers", body),
+    updateResellerTier: (id: string, body: UpsertResellerTierInput) => apiPatch<{ tier: AdminResellerTier }>(`/admin/resellers/tiers/${id}`, body),
+    deleteResellerTier: (id: string) => apiDelete<{ removed: number }>(`/admin/resellers/tiers/${id}`),
+
+    resellers: (params: { page: number; pageSize: number; status?: AdminResellerStatus; tierId?: string; keyword?: string }) =>
+        apiGet<Paginated<AdminReseller>>("/admin/resellers", { params }),
+    resellerCounts: () => apiGet<AdminResellerCounts>("/admin/resellers/counts"),
+    reviewReseller: (userId: string, body: { decision: "approve" | "reject"; tierId?: string; rejectReason?: string }) =>
+        apiPost<{ status: AdminResellerStatus }>(`/admin/resellers/${userId}/review`, body),
+    updateReseller: (userId: string, body: { tierId?: string; multiplierOverride?: string; clearMultiplierOverride?: boolean; status?: AdminResellerStatus }) =>
+        apiPatch<{ reseller: AdminReseller }>(`/admin/resellers/${userId}`, body),
 };

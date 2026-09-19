@@ -19,7 +19,7 @@ import { createVideoGenerationTask, pollVideoGenerationTask, storeGeneratedVideo
 import { ApiError } from "@/services/api/client";
 import { useAssetStore } from "@/stores/use-asset-store";
 import { useWorkbenchAgentStore } from "@/stores/use-workbench-agent-store";
-import { boolConfig, modelOptionLabel, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
+import { boolConfig, modelOptionLabel, modelOptionName, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { useThemeStore } from "@/stores/use-theme-store";
 import type { ReferenceImage } from "@/types/image";
 import i18n from "@/i18n";
@@ -104,8 +104,8 @@ export default function VideoPage() {
     const model = effectiveConfig.videoModel || effectiveConfig.model;
     const canGenerate = Boolean(prompt.trim());
     // Video bills per second, so the estimate scales with the configured duration.
-    const videoSeconds = Math.max(1, Number(effectiveConfig.videoSeconds) || 1);
-    const videoSpec = videoPricingSpecFor(effectiveConfig.vquality, false);
+    const videoSeconds = Math.max(4, Number(effectiveConfig.videoSeconds) || 4);
+    const videoSpec = videoPricingSpecFor(effectiveConfig.vquality, false, modelOptionName(model));
     const { affordable } = useCanAffordGeneration(model, { seconds: videoSeconds, count: 1, spec: videoSpec });
 
     useEffect(() => {
@@ -785,8 +785,8 @@ function buildVideoConfig(config: AiConfig, model: string): AiConfig {
 
 function normalizeVideoSeconds(value: string) {
     if (String(value).trim() === "-1") return "-1";
-    const seconds = Math.floor(Number(value) || 6);
-    return String(Math.max(1, Math.min(20, seconds)));
+    const seconds = Math.floor(Number(value) || 5);
+    return String(Math.max(4, Math.min(20, seconds)));
 }
 
 function normalizeVideoSize(value: string) {

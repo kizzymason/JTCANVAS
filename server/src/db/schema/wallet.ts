@@ -93,6 +93,11 @@ export const redeemCardBatches = pgTable("redeem_card_batches", {
     name: text("name").default("").notNull(),
     faceValue: moneyColumn("face_value").notNull(),
     quantity: integer("quantity").notNull(),
+    /**
+     * Set when the batch stocks a card-shop product. Untyped on purpose (no FK to card_products
+     * here) to keep this table free of a dependency on the shop schema; the shop side owns the join.
+     */
+    productId: uuid("product_id"),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
     expiresAt: timestamp("expires_at", { withTimezone: true }),
     createdAt: createdAt(),

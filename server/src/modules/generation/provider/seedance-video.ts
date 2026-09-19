@@ -38,6 +38,17 @@ export function seedanceResolution(value: string | undefined) {
     return `${raw}p`;
 }
 
+export function friendlySeedanceError(message: string) {
+    const raw = message.trim();
+    if (/output audio may be related to copyright/i.test(raw) || /copyright restrictions/i.test(raw)) {
+        return "生成失败：输出音频可能涉及版权限制。请关闭「生成声音」后重试，或更换提示词。";
+    }
+    if (/parameter duration specified in the request is not valid/i.test(raw) || /duration.*not valid.*r2v/i.test(raw)) {
+        return "该模型最低生成时长4S";
+    }
+    return raw;
+}
+
 export function seedanceAspectRatio(size: string | undefined) {
     const value = (size ?? "").trim();
     if (!value || value === "auto") return undefined;
@@ -61,9 +72,13 @@ export function seedanceCreateBody(input: {
     generateAudio?: boolean;
     watermark?: boolean;
     references?: SeedanceReference[];
+    /** Overrides the Seedance resolution vocabulary for models that use their own (e.g. `2k`). */
+    upstreamResolution?: string;
+    /** Some models reject text-to-video without an explicit ratio, so one is always sent. */
+    requireRatio?: boolean;
 }) {
-    const resolution = seedanceResolution(input.resolution);
-    const ratio = seedanceAspectRatio(input.size);
+    const resolution = input.upstreamResolution ?? seedanceResolution(input.resolution);
+    const ratio = seedanceAspectRatio(input.size) ?? (input.requireRatio ? "16:9" : undefined);
     const duration = input.seconds || 5;
     const generateAudio = Boolean(input.generateAudio);
     const watermark = Boolean(input.watermark);
@@ -125,9 +140,15 @@ export function videoErrorMessage(payload: Record<string, unknown> | undefined) 
     return typeof message === "string" ? message : "";
 }
 
+/** First element of `data` when the relay returns a list of results rather than a single object. */
+function firstOf(value: unknown) {
+    return Array.isArray(value) ? asRecord(value[0]) : undefined;
+}
+
 export function videoResultUrl(payload: Record<string, unknown>) {
-    const nested = asRecord(payload.data);
-    const output = asRecord(payload.output) ?? asRecord(nested?.output);
+    // MiniMax-style relays answer `{ data: [{ url }] }`; Seedance/Ark answer `{ data: { url } }`.
+    const nested = asRecord(payload.data) ?? firstOf(payload.data);
+    const output = asRecord(payload.output) ?? firstOf(payload.output) ?? asRecord(nested?.output);
     const content = asRecord(payload.content) ?? asRecord(nested?.content);
     const candidates = [
         payload.url,
@@ -143,6 +164,30 @@ export function videoResultUrl(payload: Record<string, unknown>) {
     ];
     const found = candidates.find((item) => typeof item === "string" && item.trim());
     return typeof found === "string" ? found : "";
+}
+
+/** Completion tokens from a WhatsToken / NewAPI / Ark poll envelope. */
+export function videoUsageTokens(payload: Record<string, unknown> | undefined) {
+    if (!payload) return undefined;
+    const nested = asRecord(payload.data) ?? firstOf(payload.data);
+    const output = asRecord(payload.output) ?? firstOf(payload.output) ?? asRecord(nested?.output);
+    const usage =
+        asRecord(payload.usage) ??
+        asRecord(nested?.usage) ??
+        asRecord(output?.usage) ??
+        asRecord(asRecord(payload.metadata)?.usage);
+    const candidates = [
+        usage?.completion_tokens,
+        usage?.output_tokens,
+        usage?.total_tokens,
+        payload.completion_tokens,
+        nested?.completion_tokens,
+    ];
+    for (const item of candidates) {
+        const value = typeof item === "number" ? item : typeof item === "string" && item.trim() ? Number(item) : NaN;
+        if (Number.isFinite(value) && value >= 1) return Math.floor(value);
+    }
+    return undefined;
 }
 
 export function isSeedanceFailedStatus(status: string) {

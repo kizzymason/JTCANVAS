@@ -1,15 +1,16 @@
 import { InjectQueue } from "@nestjs/bullmq";
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import { HttpStatus, Inject, Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import type { Queue } from "bullmq";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { DB, type Database, type DbTransaction } from "../../db/db.module";
-import { files, generationTasks } from "../../db/schema";
-import { badRequest, notFound, tooManyActiveTasks } from "../../common/errors";
+import { apiKeys, files, generationTasks } from "../../db/schema";
+import { AppError, badRequest, notFound, tooManyActiveTasks } from "../../common/errors";
 import type { Paginated } from "../../common/types";
 import { assertImageGenerationFeatures, assertVideoGenerationFeatures } from "../pricing/model-features";
 import { PricingService } from "../pricing/pricing.service";
 import { decodeModelValue } from "../pricing/pricing.types";
+import { billableInputTokens } from "../pricing/token-counter";
 import { SettingsService } from "../settings/settings.service";
 import { assertGenerationEnabled } from "../settings/site-services";
 import { StorageService } from "../storage/storage.service";
@@ -17,12 +18,34 @@ import { isPublicHttpUrl } from "../storage/public-file-url";
 import { WalletService } from "../wallet/wallet.service";
 import { GENERATION_QUEUE, type GenerationJobData } from "./generation.queue";
 import { pricingSpec } from "./image-size";
-import { isVideoMime, videoPricingSpec } from "./video-pricing-spec";
+import { billedVideoResolution, isVideoMime, videoPricingSpec } from "./video-pricing-spec";
+import { seedanceSpecResolution, seedanceTokensFor, seedanceUsdPerMillion } from "./whatstoken-catalog";
 import type { CreateGenerationDto } from "./dto/generation.dto";
 
 const ACTIVE_STATUSES = ["pending", "running"] as const;
 
+/** Ceiling for token-billed output when the caller does not ask for one. */
+const DEFAULT_MAX_OUTPUT_TOKENS = 4096;
+
 export type GenerationTask = typeof generationTasks.$inferSelect;
+
+export type SubmitOptions = {
+    /**
+     * Reseller coefficient resolved by the caller. Passed in rather than looked up here so the canvas
+     * path stays on public prices and only the open platform pays the reseller rate.
+     */
+    multiplier?: string;
+    /** Overrides the per-user active-task cap; API keys carry their own concurrency budget. */
+    maxActive?: number;
+    /** Downstream attribution snapshotted for quota settlement and asynchronous video logging. */
+    apiContext?: {
+        apiKeyId: string;
+        endpoint?: string;
+        model?: string;
+        clientIp?: string;
+        deferredUsage?: boolean;
+    };
+};
 
 export type TaskOutput = {
     id: string;
@@ -58,10 +81,11 @@ export class GenerationService {
         this.maxActive = config.get<number>("generation.maxActiveTasksPerUser")!;
     }
 
-    async submit(userId: string, input: CreateGenerationDto) {
+    async submit(userId: string, input: CreateGenerationDto, opts?: SubmitOptions) {
         const site = await this.settings.getSite();
         assertGenerationEnabled(site, input.capability);
-        await this.assertCapacity(userId);
+        const maxActive = opts?.maxActive && opts.maxActive > 0 ? opts.maxActive : this.maxActive;
+        await this.assertCapacity(userId, undefined, maxActive);
         const references = await this.resolveReferences(userId, input);
 
         const publicModel = await this.pricing.resolvePublicModel(input.model);
@@ -77,29 +101,45 @@ export class GenerationService {
             assertVideoGenerationFeatures(publicModel.features, { seconds: input.seconds, resolution: input.resolution, size: input.size });
         }
 
+        const billedResolution = input.capability === "video" ? billedVideoResolution(input.resolution, publicModel.modelName) : undefined;
         const spec =
             input.capability === "image"
                 ? pricingSpec(input.quality, input.size, publicModel.features.aspectPresets)
                 : input.capability === "video"
-                  ? videoPricingSpec(input.resolution, references.some((item) => isVideoMime(item.mimeType)))
+                  ? videoPricingSpec(input.resolution, references.some((item) => isVideoMime(item.mimeType)), publicModel.modelName)
                   : undefined;
-        const estimate = await this.pricing.estimate({
-            model: input.model,
-            count: input.count ?? 1,
-            seconds: input.seconds,
-            spec,
-            referenceCount: references.length,
-        });
+        // Token counts are always derived server-side; a client-supplied count would be a billing hole.
+        const maxOutputTokens = publicModel.billingMode === "per_token" ? (input.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS) : undefined;
+        const inputTokens = publicModel.billingMode === "per_token" ? billableInputTokens(input.prompt, publicModel.modelName) : undefined;
+        const estimate = await this.pricing.estimate(
+            {
+                model: input.model,
+                count: input.count ?? 1,
+                seconds: input.seconds,
+                spec,
+                referenceCount: references.length,
+                inputTokens,
+                maxOutputTokens,
+            },
+            { multiplier: opts?.multiplier },
+        );
 
         const { modelName } = decodeModelValue(input.model);
         const resolved = await this.pricing.resolveForExecution(input.model);
+        const videoCount = Math.max(1, input.count ?? 1);
+        const videoSeconds = input.seconds ?? 0;
+        const upstreamUsdPerM = input.capability === "video" ? seedanceUsdPerMillion(publicModel.modelName, spec) ?? "" : "";
+        const estimatedTokens =
+            upstreamUsdPerM && videoSeconds >= 1
+                ? seedanceTokensFor(seedanceSpecResolution(spec ?? billedResolution), videoSeconds).times(videoCount).toFixed(0)
+                : "";
 
         // One transaction: the task row and the frozen funds must appear together or not at all.
         const task = await this.db.transaction(async (tx) => {
             // Take the per-user wallet lock first so concurrent submits from one account serialise;
             // without it, four parallel requests all read the active-task count before any inserted.
             await this.wallet.lockForUpdate(tx, userId);
-            await this.assertCapacity(userId, tx);
+            await this.assertCapacity(userId, tx, maxActive);
 
             const [created] = await tx
                 .insert(generationTasks)
@@ -119,8 +159,8 @@ export class GenerationService {
                         quality: input.quality ?? "",
                         background: input.background ?? "",
                         seconds: input.seconds ?? 0,
-                        resolution: input.resolution ?? "",
-                        generateAudio: input.generateAudio ?? false,
+                        resolution: billedResolution ?? input.resolution ?? "",
+                        generateAudio: input.capability === "video" ? (input.generateAudio ?? true) : (input.generateAudio ?? false),
                         watermark: input.watermark ?? false,
                         voice: input.voice ?? "",
                         audioFormat: input.audioFormat ?? "",
@@ -130,11 +170,44 @@ export class GenerationService {
                         references: references.map((item) => item.storageKey),
                         mask: input.mask ?? "",
                         spec: spec ?? "",
+                        estimatedTokens,
+                        upstreamUsdPerM,
+                        // Snapshotted so a tier change mid-flight cannot corrupt the settlement.
+                        billingMultiplier: estimate.multiplier,
+                        billingMode: publicModel.billingMode,
+                        tokenPrices: publicModel.billingMode === "per_token" ? publicModel.tokenPrices : undefined,
+                        inputTokens: inputTokens ?? 0,
+                        maxOutputTokens: maxOutputTokens ?? 0,
+                        apiKeyId: opts?.apiContext?.apiKeyId ?? "",
+                        apiEndpoint: opts?.apiContext?.endpoint ?? "",
+                        apiModel: opts?.apiContext?.model ?? "",
+                        apiClientIp: opts?.apiContext?.clientIp ?? "",
+                        apiUsageDeferred: opts?.apiContext?.deferredUsage ?? false,
                     },
                 })
                 .returning();
 
             await this.wallet.freeze(tx, { userId, amount: estimate.amount, taskId: created.id });
+            if (opts?.apiContext?.apiKeyId) {
+                const [reserved] = await tx
+                    .update(apiKeys)
+                    .set({
+                        quotaUsed: sql`${apiKeys.quotaUsed} + ${estimate.amount}::numeric`,
+                        updatedAt: new Date(),
+                    })
+                    .where(
+                        and(
+                            eq(apiKeys.id, opts.apiContext.apiKeyId),
+                            eq(apiKeys.userId, userId),
+                            eq(apiKeys.status, "active"),
+                            or(isNull(apiKeys.quotaLimit), sql`${apiKeys.quotaUsed} + ${estimate.amount}::numeric <= ${apiKeys.quotaLimit}`),
+                        ),
+                    )
+                    .returning({ id: apiKeys.id });
+                if (!reserved) {
+                    throw new AppError(HttpStatus.PAYMENT_REQUIRED, "api_key_quota_exhausted", "API key quota is insufficient for this request");
+                }
+            }
             return created;
         });
 
@@ -219,12 +292,12 @@ export class GenerationService {
      * work for a fast rejection, and once inside the transaction under the wallet lock, which is the
      * authoritative check.
      */
-    private async assertCapacity(userId: string, tx?: DbTransaction) {
+    private async assertCapacity(userId: string, tx?: DbTransaction, limit = this.maxActive) {
         const [row] = await (tx ?? this.db)
             .select({ total: sql<number>`count(*)::int` })
             .from(generationTasks)
             .where(and(eq(generationTasks.userId, userId), inArray(generationTasks.status, [...ACTIVE_STATUSES])));
-        if ((row?.total ?? 0) >= this.maxActive) throw tooManyActiveTasks(this.maxActive);
+        if ((row?.total ?? 0) >= limit) throw tooManyActiveTasks(limit);
     }
 
     private async resolveReferences(userId: string, input: CreateGenerationDto) {

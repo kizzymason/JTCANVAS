@@ -16,9 +16,14 @@ export type SiteSettings = {
     imageGenerationEnabled: boolean;
     videoGenerationEnabled: boolean;
     agentEnabled: boolean;
+    /** Gates both the reseller console and the downstream `/v1` API. */
+    openPlatformEnabled: boolean;
 };
 
-export type PublicSiteInfo = Pick<SiteSettings, "siteName" | "registrationEnabled" | "rechargeNotice" | "imageGenerationEnabled" | "videoGenerationEnabled" | "agentEnabled">;
+export type PublicSiteInfo = Pick<
+    SiteSettings,
+    "siteName" | "registrationEnabled" | "rechargeNotice" | "imageGenerationEnabled" | "videoGenerationEnabled" | "agentEnabled" | "openPlatformEnabled"
+>;
 
 export type RechargeSettings = {
     allowCustomAmount: boolean;
@@ -57,6 +62,7 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
     imageGenerationEnabled: true,
     videoGenerationEnabled: true,
     agentEnabled: true,
+    openPlatformEnabled: true,
 };
 
 export const DEFAULT_RECHARGE_SETTINGS: RechargeSettings = {
@@ -75,6 +81,7 @@ export function toPublicSite(site: SiteSettings): PublicSiteInfo {
         imageGenerationEnabled: site.imageGenerationEnabled,
         videoGenerationEnabled: site.videoGenerationEnabled,
         agentEnabled: site.agentEnabled,
+        openPlatformEnabled: site.openPlatformEnabled,
     };
 }
 

@@ -6,6 +6,7 @@ import { Trans, useTranslation } from "react-i18next";
 
 import { navigationTools } from "@/constant/navigation-tools";
 import { requireAuth } from "@/stores/use-auth-modal-store";
+import { useAnnouncementStore } from "@/stores/use-announcement-store";
 
 function Highlighter({ action, color, children }: { action: "highlight" | "underline"; color: string; children?: ReactNode }) {
     return (
@@ -23,6 +24,7 @@ function Highlighter({ action, color, children }: { action: "highlight" | "under
 export default function IndexPage() {
     const { t } = useTranslation();
     const navigate = useNavigate();
+    const openJoinCommunity = useAnnouncementStore((state) => state.openJoinCommunity);
     const [primaryTool] = navigationTools;
     const go = (path: string) => {
         if (requireAuth(path)) return;
@@ -31,7 +33,7 @@ export default function IndexPage() {
 
     return (
         <main className="relative h-full overflow-y-auto bg-background bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px] text-stone-950 dark:bg-[radial-gradient(rgba(245,245,244,.18)_1px,transparent_1px)] dark:text-stone-100">
-            <section className="relative mx-auto min-h-[calc(100vh-4.5rem)] max-w-7xl overflow-hidden px-6">
+            <section className="relative mx-auto min-h-[calc(100vh-5rem)] max-w-7xl overflow-hidden px-6">
                 <div className="pointer-events-none absolute left-[15%] top-24 size-20 rounded-full border border-dashed border-stone-200 dark:border-stone-800" />
                 <div className="pointer-events-none absolute right-[23%] top-[48%] size-20 rounded-full border border-dashed border-stone-200 dark:border-stone-800" />
 
@@ -41,11 +43,11 @@ export default function IndexPage() {
                         <Trans i18nKey="home.description" components={{ canvas: <Highlighter action="underline" color="#FF9800" />, content: <Highlighter action="highlight" color="#87CEFA" /> }} />
                     </p>
                     <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
-                        <Button type="primary" size="large" onClick={() => go(`/${primaryTool.slug}`)} icon={<ArrowRight className="size-4" />} iconPlacement="end">
+                        <Button type="primary" size="large" onClick={() => go(primaryTool.path)} icon={<ArrowRight className="size-4" />} iconPlacement="end">
                             {t("home.start")}
                         </Button>
-                        <Button size="large" onClick={() => go("/canvas")}>
-                            {t("home.openCanvas")}
+                        <Button size="large" onClick={openJoinCommunity}>
+                            {t("home.joinCommunity")}
                         </Button>
                     </div>
                 </div>

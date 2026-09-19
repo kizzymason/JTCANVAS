@@ -108,6 +108,18 @@ export class CreateGenerationDto {
     @IsIn(["auto", "low", "medium", "high", "xhigh"])
     reasoningEffort?: string;
 
+    /**
+     * Output ceiling for token-billed models. It is both the freeze basis and the upstream limit, so a
+     * caller lowering it lowers the hold *and* the reply length; it can never be used to under-pay.
+     */
+    @ApiPropertyOptional({ description: "按 token 计费模型的输出上限", maximum: 128_000 })
+    @IsOptional()
+    @Type(() => Number)
+    @IsInt()
+    @Min(1)
+    @Max(128_000)
+    maxOutputTokens?: number;
+
     @ApiPropertyOptional({ description: "调用来源，便于客服排查", example: "canvas" })
     @IsOptional()
     @IsString()

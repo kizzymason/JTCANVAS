@@ -1,10 +1,12 @@
 import { Inject, Injectable, Logger, OnModuleInit } from "@nestjs/common";
-import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, or, sql } from "drizzle-orm";
 import { DB, type Database } from "../../db/db.module";
-import { channelModels, channels, generationTasks, modelPrices, orders, piapiAccounts, users, walletLedger, wallets } from "../../db/schema";
+import { channelModels, channels, generationTasks, modelPrices, orders, piapiAccounts, resellerAccounts, resellerTiers, users, walletLedger, wallets } from "../../db/schema";
 import { badRequest, conflict, forbidden, notFound } from "../../common/errors";
 import { isNegative, money, toMoneyString } from "../../common/money";
 import type { Paginated } from "../../common/types";
+import { asInt, toIsoTimestamptz } from "./admin-overview";
+import { eachUtcDate, utcDateString } from "../visitors/visitors-classify";
 import { AuthService } from "../auth/auth.service";
 import { SessionService } from "../auth/session.service";
 import { CryptoService } from "../crypto/crypto.service";
@@ -12,6 +14,8 @@ import { seedPiapiChannel } from "../generation/piapi-channel.seed";
 import { seedWhatsTokenChannel } from "../generation/whatstoken-channel.seed";
 import { parseModelFeatures } from "../pricing/model-features";
 import { PricingService } from "../pricing/pricing.service";
+import { ResellerPricingService } from "../pricing/reseller-pricing.service";
+import { ApiKeyService } from "../openapi/api-key.service";
 import { SettingsService, type StorageSettings } from "../settings/settings.service";
 import { StorageService } from "../storage/storage.service";
 import { WalletService } from "../wallet/wallet.service";
@@ -25,6 +29,8 @@ export class AdminService implements OnModuleInit {
         @Inject(DB) private readonly db: Database,
         private readonly crypto: CryptoService,
         private readonly pricing: PricingService,
+        private readonly resellerPricing: ResellerPricingService,
+        private readonly apiKeys: ApiKeyService,
         private readonly wallet: WalletService,
         private readonly sessions: SessionService,
         private readonly settings: SettingsService,
@@ -39,7 +45,7 @@ export class AdminService implements OnModuleInit {
         );
         const whatsToken = await this.ensureWhatsTokenChannel();
         this.logger.log(
-            `WhatsToken channel ${whatsToken.created ? "created" : "ensured"} ${whatsToken.id}: modelsCreated=${whatsToken.modelsCreated} pricesInserted=${whatsToken.pricesInserted} keyUpdated=${whatsToken.keyUpdated}`,
+            `WhatsToken channel ${whatsToken.created ? "created" : "ensured"} ${whatsToken.id}: modelsCreated=${whatsToken.modelsCreated} pricesInserted=${whatsToken.pricesInserted} pricesUpdated=${whatsToken.pricesUpdated} keyUpdated=${whatsToken.keyUpdated}`,
         );
     }
 
@@ -53,7 +59,7 @@ export class AdminService implements OnModuleInit {
         };
     }
 
-    /** Creates the WhatsToken OpenAI channel and Seedream/Seedance models if missing; never overwrites existing prices or keys. */
+    /** Creates the WhatsToken OpenAI channel and Seedream/Seedance models if missing. Seedance video unit prices are synced from the token formula; display names and image prices are not rewritten. */
     async ensureWhatsTokenChannel() {
         const result = await seedWhatsTokenChannel(this.db, {
             apiKey: process.env.WHATSTOKEN_API_KEY?.trim() || undefined,
@@ -62,37 +68,130 @@ export class AdminService implements OnModuleInit {
         await this.pricing.invalidate();
         return {
             ...result,
-            audit: { targetId: result.id, after: { name: result.name, created: result.created, modelsCreated: result.modelsCreated, pricesInserted: result.pricesInserted, keyUpdated: result.keyUpdated } },
+            audit: { targetId: result.id, after: { name: result.name, created: result.created, modelsCreated: result.modelsCreated, pricesInserted: result.pricesInserted, pricesUpdated: result.pricesUpdated, keyUpdated: result.keyUpdated } },
         };
     }
 
-    /** Dashboard aggregates. Kept to a handful of cheap counts so the page stays fast. */
+    /** Live aggregates plus a 14-day series for the ops dashboard. Counts are coerced because postgres.js may return strings. */
     async overview() {
-        const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-        const [[userStats], [walletStats], [taskStats], [revenue]] = await Promise.all([
-            this.db.select({ total: sql<number>`count(*)::int`, active: sql<number>`count(*) filter (where ${users.status} = 'active')::int` }).from(users),
+        const today = utcDateString();
+        const from = utcDateString(new Date(Date.now() - 13 * 24 * 60 * 60 * 1000));
+        const since = new Date(`${from}T00:00:00.000Z`);
+        const failedSince = toIsoTimestamptz(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
+        const userDay = sql<string>`to_char((${users.createdAt} at time zone 'utc'), 'YYYY-MM-DD')`;
+        const taskDay = sql<string>`to_char((${generationTasks.createdAt} at time zone 'utc'), 'YYYY-MM-DD')`;
+        const creditDay = sql<string>`to_char((${walletLedger.createdAt} at time zone 'utc'), 'YYYY-MM-DD')`;
+        const spendDay = sql<string>`to_char((${walletLedger.createdAt} at time zone 'utc'), 'YYYY-MM-DD')`;
+
+        const [[userStats], [walletStats], [taskStats], statusRows, capabilityRows, userDaily, taskDaily, creditDaily, spendDaily] = await Promise.all([
+            this.db
+                .select({
+                    total: sql<number>`count(*)::int`,
+                    active: sql<number>`count(*) filter (where ${users.status} = 'active')::int`,
+                })
+                .from(users),
             this.db
                 .select({
                     balance: sql<string>`coalesce(sum(${wallets.balance}), 0)::text`,
                     frozen: sql<string>`coalesce(sum(${wallets.frozen}), 0)::text`,
                     spent: sql<string>`coalesce(sum(${wallets.totalSpent}), 0)::text`,
+                    recharged: sql<string>`coalesce(sum(${wallets.totalRecharged}), 0)::text`,
                 })
                 .from(wallets),
             this.db
                 .select({
                     total: sql<number>`count(*)::int`,
-                    running: sql<number>`count(*) filter (where ${generationTasks.status} in ('pending','running'))::int`,
-                    failed7d: sql<number>`count(*) filter (where ${generationTasks.status} = 'failed' and ${generationTasks.createdAt} >= ${since})::int`,
+                    running: sql<number>`count(*) filter (where ${generationTasks.status} in ('pending'::task_status, 'running'::task_status))::int`,
+                    failed7d: sql<number>`count(*) filter (where ${generationTasks.status} = 'failed'::task_status and ${generationTasks.createdAt} >= ${failedSince}::timestamptz)::int`,
+                    succeeded: sql<number>`count(*) filter (where ${generationTasks.status} in ('succeeded'::task_status, 'partial'::task_status))::int`,
                 })
                 .from(generationTasks),
-            this.db.select({ total: sql<string>`coalesce(sum(${orders.amount}), 0)::text` }).from(orders).where(eq(orders.status, "paid")),
+            this.db
+                .select({
+                    status: generationTasks.status,
+                    count: sql<number>`count(*)::int`,
+                })
+                .from(generationTasks)
+                .groupBy(generationTasks.status),
+            this.db
+                .select({
+                    capability: generationTasks.capability,
+                    count: sql<number>`count(*)::int`,
+                })
+                .from(generationTasks)
+                .groupBy(generationTasks.capability),
+            this.db
+                .select({
+                    date: userDay,
+                    count: sql<number>`count(*)::int`,
+                })
+                .from(users)
+                .where(gte(users.createdAt, since))
+                .groupBy(userDay),
+            this.db
+                .select({
+                    date: taskDay,
+                    total: sql<number>`count(*)::int`,
+                    succeeded: sql<number>`count(*) filter (where ${generationTasks.status} in ('succeeded'::task_status, 'partial'::task_status))::int`,
+                    failed: sql<number>`count(*) filter (where ${generationTasks.status} = 'failed'::task_status)::int`,
+                })
+                .from(generationTasks)
+                .where(gte(generationTasks.createdAt, since))
+                .groupBy(taskDay),
+            this.db
+                .select({
+                    date: creditDay,
+                    total: sql<string>`coalesce(sum(${walletLedger.amount}), 0)::text`,
+                })
+                .from(walletLedger)
+                .where(and(gte(walletLedger.createdAt, since), inArray(walletLedger.type, ["recharge", "redeem", "admin_adjust"]), sql`${walletLedger.amount} > 0`))
+                .groupBy(creditDay),
+            this.db
+                .select({
+                    date: spendDay,
+                    total: sql<string>`coalesce(sum(abs(${walletLedger.amount})), 0)::text`,
+                })
+                .from(walletLedger)
+                .where(and(gte(walletLedger.createdAt, since), eq(walletLedger.type, "settle")))
+                .groupBy(spendDay),
         ]);
 
+        const usersByDate = new Map(userDaily.map((row) => [row.date, asInt(row.count)]));
+        const tasksByDate = new Map(taskDaily.map((row) => [row.date, { total: asInt(row.total), succeeded: asInt(row.succeeded), failed: asInt(row.failed) }]));
+        const creditByDate = new Map(creditDaily.map((row) => [row.date, row.total]));
+        const spendByDate = new Map(spendDaily.map((row) => [row.date, row.total]));
+        const series = eachUtcDate(from, today).map((date) => {
+            const tasks = tasksByDate.get(date) ?? { total: 0, succeeded: 0, failed: 0 };
+            return {
+                date,
+                users: usersByDate.get(date) ?? 0,
+                tasks: tasks.total,
+                succeeded: tasks.succeeded,
+                failed: tasks.failed,
+                revenue: toMoneyString(creditByDate.get(date) ?? 0),
+                spent: toMoneyString(spendByDate.get(date) ?? 0),
+            };
+        });
+
+        const recharged = toMoneyString(walletStats?.recharged ?? 0);
         return {
-            users: userStats,
-            wallet: { balance: toMoneyString(walletStats.balance), frozen: toMoneyString(walletStats.frozen), spent: toMoneyString(walletStats.spent) },
-            tasks: taskStats,
-            revenue: toMoneyString(revenue.total),
+            users: { total: asInt(userStats?.total), active: asInt(userStats?.active) },
+            wallet: {
+                balance: toMoneyString(walletStats?.balance ?? 0),
+                frozen: toMoneyString(walletStats?.frozen ?? 0),
+                spent: toMoneyString(walletStats?.spent ?? 0),
+                recharged,
+            },
+            tasks: {
+                total: asInt(taskStats?.total),
+                running: asInt(taskStats?.running),
+                failed7d: asInt(taskStats?.failed7d),
+                succeeded: asInt(taskStats?.succeeded),
+            },
+            revenue: recharged,
+            series,
+            tasksByStatus: statusRows.map((row) => ({ status: row.status, count: asInt(row.count) })),
+            tasksByCapability: capabilityRows.map((row) => ({ capability: row.capability, count: asInt(row.count) })),
         };
     }
 
@@ -130,25 +229,75 @@ export class AdminService implements OnModuleInit {
         return { items, total: counted?.total ?? 0, page: query.page, pageSize: query.pageSize };
     }
 
-    async updateUser(id: string, input: UpdateUserDto) {
+    async updateUser(id: string, input: UpdateUserDto, operatorId: string) {
         const [before] = await this.db.select().from(users).where(eq(users.id, id)).limit(1);
         if (!before) throw notFound("用户不存在");
 
-        const [after] = await this.db
-            .update(users)
-            .set({
-                ...(input.role === undefined ? {} : { role: input.role }),
-                ...(input.status === undefined ? {} : { status: input.status }),
-                ...(input.displayName === undefined ? {} : { displayName: input.displayName }),
-                ...(input.password === undefined ? {} : { passwordHash: await AuthService.hashPassword(input.password) }),
-                updatedAt: new Date(),
-            })
-            .where(eq(users.id, id))
-            .returning();
+        if (before.role === "admin" && input.role && input.role !== "admin") {
+            const [admins] = await this.db.select({ total: sql<number>`count(*)::int` }).from(users).where(eq(users.role, "admin"));
+            if ((admins?.total ?? 0) <= 1) throw forbidden("不能降级最后一个管理员");
+        }
+
+        const passwordHash = input.password === undefined ? undefined : await AuthService.hashPassword(input.password);
+        const [after] = await this.db.transaction(async (tx) => {
+            if (input.role === "reseller" && before.role !== "reseller") {
+                const [defaultTier] = await tx.select({ id: resellerTiers.id }).from(resellerTiers).where(eq(resellerTiers.isDefault, true)).limit(1);
+                const [fallbackTier] = defaultTier
+                    ? [defaultTier]
+                    : await tx.select({ id: resellerTiers.id }).from(resellerTiers).orderBy(asc(resellerTiers.sortOrder)).limit(1);
+                const tierId = (defaultTier ?? fallbackTier)?.id;
+                if (!tierId) throw badRequest("NO_TIER_CONFIGURED", "请先创建至少一个代理商等级");
+
+                await tx
+                    .insert(resellerAccounts)
+                    .values({
+                        userId: id,
+                        tierId,
+                        status: "approved",
+                        companyName: before.displayName || before.username,
+                        contactName: before.displayName || before.username,
+                        useCase: "管理员直接授予开放平台代理商资格",
+                        reviewedAt: new Date(),
+                        reviewedBy: operatorId,
+                    })
+                    .onConflictDoUpdate({
+                        target: resellerAccounts.userId,
+                        set: {
+                            status: "approved",
+                            tierId: sql`coalesce(${resellerAccounts.tierId}, ${tierId}::uuid)`,
+                            rejectReason: "",
+                            reviewedAt: new Date(),
+                            reviewedBy: operatorId,
+                            updatedAt: new Date(),
+                        },
+                    });
+            } else if (input.role === "user" && before.role !== "user") {
+                // A role downgrade must also stop old API keys; the guard authorizes from this row.
+                await tx
+                    .update(resellerAccounts)
+                    .set({ status: "suspended", updatedAt: new Date() })
+                    .where(and(eq(resellerAccounts.userId, id), eq(resellerAccounts.status, "approved")));
+            }
+
+            return tx
+                .update(users)
+                .set({
+                    ...(input.role === undefined ? {} : { role: input.role }),
+                    ...(input.status === undefined ? {} : { status: input.status }),
+                    ...(input.displayName === undefined ? {} : { displayName: input.displayName }),
+                    ...(passwordHash === undefined ? {} : { passwordHash }),
+                    updatedAt: new Date(),
+                })
+                .where(eq(users.id, id))
+                .returning();
+        });
 
         // Disabling an account or changing its password must take effect immediately, not at token expiry.
         if (input.status === "disabled" || input.password) await this.sessions.revokeAllForUser(id);
         else if (input.role && input.role !== before.role) await this.sessions.refreshPayload(id, { userId: id, username: after.username, role: after.role });
+        if (input.role && input.role !== before.role) {
+            await Promise.all([this.resellerPricing.invalidate(id), this.apiKeys.invalidateUser(id)]);
+        }
 
         return { user: sanitizeUser(after), audit: { targetId: id, before: sanitizeUser(before), after: sanitizeUser(after) } };
     }

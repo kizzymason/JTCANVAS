@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import { Tooltip } from "antd";
-import { Keyboard, Puzzle, Settings2, Wallet } from "lucide-react";
+import { FileText, Keyboard, Puzzle, Settings2, Wallet } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
@@ -8,6 +8,7 @@ import { canvasThemes } from "@/lib/canvas-theme";
 import { cn } from "@/lib/utils";
 import { formatMoney } from "@/services/api/models";
 import { useAccountDrawerStore } from "@/stores/use-account-drawer-store";
+import { useAnnouncementStore } from "@/stores/use-announcement-store";
 import { useAuthStore } from "@/stores/use-auth-store";
 import { requireAuth } from "@/stores/use-auth-modal-store";
 import { useConfigStore } from "@/stores/use-config-store";
@@ -26,6 +27,7 @@ export function UserStatusActions({ showConfig = true, variant = "default", onOp
     const setTheme = useThemeStore((state) => state.setTheme);
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
     const openAccountDrawer = useAccountDrawerStore((state) => state.open);
+    const openAnnouncements = useAnnouncementStore((state) => state.openList);
     const user = useAuthStore((state) => state.user);
     const canvasTheme = canvasThemes[theme];
     const compact = variant === "canvas";
@@ -44,9 +46,15 @@ export function UserStatusActions({ showConfig = true, variant = "default", onOp
             ) : null}
             {user ? (
                 <Tooltip title={t("account.balanceTooltip", { balance: formatMoney(user.wallet.balance) })} mouseEnterDelay={0.2}>
-                    <button type="button" className={cn(naturalIconClass, "w-auto gap-1.5 px-2 font-medium", compact ? "text-xs" : "text-sm")} style={iconStyle} onClick={openAccountDrawer} aria-label={t("account.balance")}>
+                    <button
+                        type="button"
+                        className={cn(naturalIconClass, "lg:w-auto lg:gap-1.5 lg:px-2 lg:font-medium", compact ? "lg:text-xs" : "lg:text-sm")}
+                        style={iconStyle}
+                        onClick={openAccountDrawer}
+                        aria-label={t("account.balanceTooltip", { balance: formatMoney(user.wallet.balance) })}
+                    >
                         <Wallet />
-                        <span>¥{formatMoney(user.wallet.balance)}</span>
+                        <span className="hidden lg:inline">¥{formatMoney(user.wallet.balance)}</span>
                     </button>
                 </Tooltip>
             ) : (
@@ -65,6 +73,9 @@ export function UserStatusActions({ showConfig = true, variant = "default", onOp
                 </button>
             ) : null}
             <AnimatedThemeToggler theme={theme} onThemeChange={setTheme} className={naturalIconClass} style={iconStyle} aria-label={t(theme === "dark" ? "topNav.lightTheme" : "topNav.darkTheme")} title={t(theme === "dark" ? "topNav.lightTheme" : "topNav.darkTheme")} />
+            <button type="button" className={naturalIconClass} style={iconStyle} onClick={openAnnouncements} aria-label={t("announcements.open")} title={t("announcements.open")}>
+                <FileText />
+            </button>
             {onOpenShortcuts ? (
                 <button type="button" className={naturalIconClass} style={iconStyle} onClick={onOpenShortcuts} aria-label={t("topNav.shortcuts")} title={t("topNav.shortcuts")}>
                     <Keyboard />

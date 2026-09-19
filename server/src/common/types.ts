@@ -1,10 +1,12 @@
-export type UserRole = "user" | "admin";
+export type UserRole = "user" | "admin" | "reseller";
 
 export type AuthUser = {
     id: string;
     username: string;
     role: UserRole;
     sessionId: string;
+    /** Set by ApiKeyGuard on open-platform requests; absent for browser sessions. */
+    apiKeyId?: string;
 };
 
 /** Fastify request augmented by AuthGuard. */

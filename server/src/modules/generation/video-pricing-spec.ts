@@ -14,11 +14,16 @@ export function normalizeVideoPricingResolution(resolution: string | undefined) 
     return raw;
 }
 
+/** Resolution used for price rows and upstream requests. 480p stays 480p. */
+export function billedVideoResolution(resolution: string | undefined, _modelName?: string) {
+    return normalizeVideoPricingResolution(resolution);
+}
+
 /**
  * Price-row spec for a video estimate.
  * `720` = 无视 (no video input). `720-video` = 含视 (at least one video reference).
  */
-export function videoPricingSpec(resolution: string | undefined, hasVideoReference: boolean) {
-    const value = normalizeVideoPricingResolution(resolution);
+export function videoPricingSpec(resolution: string | undefined, hasVideoReference: boolean, modelName?: string) {
+    const value = billedVideoResolution(resolution, modelName);
     return hasVideoReference ? `${value}${VIDEO_INPUT_SPEC_SUFFIX}` : value;
 }

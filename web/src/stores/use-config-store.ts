@@ -52,7 +52,7 @@ export const defaultConfig: AiConfig = {
     audioFormat: "mp3",
     audioSpeed: "1",
     audioInstructions: "",
-    videoSeconds: "4",
+    videoSeconds: "5",
     vquality: "720p",
     videoGenerateAudio: "true",
     videoWatermark: "false",

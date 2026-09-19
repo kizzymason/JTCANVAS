@@ -3,7 +3,7 @@ import { createdAt, moneyColumn, updatedAt } from "./_shared";
 
 export const apiFormat = pgEnum("api_format", ["openai", "gemini", "piapi"]);
 export const modelCapability = pgEnum("model_capability", ["image", "video", "text", "audio"]);
-export const billingMode = pgEnum("billing_mode", ["per_image", "per_second", "per_call"]);
+export const billingMode = pgEnum("billing_mode", ["per_image", "per_second", "per_call", "per_token"]);
 export const piapiAccountStatus = pgEnum("piapi_account_status", ["active", "exhausted", "invalid", "disabled"]);
 
 export const channels = pgTable(

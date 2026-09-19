@@ -13,10 +13,10 @@ export class UserQueryDto extends PaginationDto {
     @MaxLength(64)
     keyword?: string;
 
-    @ApiPropertyOptional({ enum: ["user", "admin"] })
+    @ApiPropertyOptional({ enum: ["user", "admin", "reseller"] })
     @IsOptional()
-    @IsIn(["user", "admin"])
-    role?: "user" | "admin";
+    @IsIn(["user", "admin", "reseller"])
+    role?: "user" | "admin" | "reseller";
 
     @ApiPropertyOptional({ enum: ["active", "disabled"] })
     @IsOptional()
@@ -25,10 +25,10 @@ export class UserQueryDto extends PaginationDto {
 }
 
 export class UpdateUserDto {
-    @ApiPropertyOptional({ enum: ["user", "admin"] })
+    @ApiPropertyOptional({ enum: ["user", "admin", "reseller"] })
     @IsOptional()
-    @IsIn(["user", "admin"])
-    role?: "user" | "admin";
+    @IsIn(["user", "admin", "reseller"])
+    role?: "user" | "admin" | "reseller";
 
     @ApiPropertyOptional({ enum: ["active", "disabled"] })
     @IsOptional()
@@ -338,6 +338,10 @@ export class ServiceSettingsDto {
     @ApiProperty({ description: "是否显示前台与画布的 Agent 入口" })
     @IsBoolean()
     agentEnabled!: boolean;
+
+    @ApiProperty({ description: "是否开放「开放平台」入口与对外 /v1 API" })
+    @IsBoolean()
+    openPlatformEnabled!: boolean;
 }
 
 export class S3SettingsDto {

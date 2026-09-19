@@ -6,17 +6,22 @@ import { eq } from "drizzle-orm";
 import Redis from "ioredis";
 import { DB, type Database } from "../../db/db.module";
 import { channelModels, channels, generationTasks } from "../../db/schema";
-import { ceilMoney, mulMoney, toMoneyString } from "../../common/money";
 import { REDIS } from "../../redis/redis.module";
 import { CryptoService } from "../crypto/crypto.service";
 import { isPublicHttpUrl } from "../storage/public-file-url";
 import { StorageService } from "../storage/storage.service";
 import { WalletService } from "../wallet/wallet.service";
+import { AppError } from "../../common/errors";
 import { parseModelFeatures } from "../pricing/model-features";
+import { countTextTokens } from "../pricing/token-counter";
+import { ApiKeyService } from "../openapi/api-key.service";
+import { UsageRecorderService } from "../openapi/usage-recorder.service";
 import { GENERATION_QUEUE, statusChannel, streamChannel, type GenerationJobData } from "./generation.queue";
+import { settleGenerationTask, videoSecondsFromParams, type GenerationSettlement } from "./generation-settlement";
+import { friendlySeedanceError } from "./provider/seedance-video";
 import { ScriptRunnerService } from "./script-runner.service";
 import { ProviderRegistry } from "./provider/provider.registry";
-import type { GenerationRequest, ReferenceInput } from "./provider/provider.types";
+import type { GenerationRequest, ReferenceInput, GenerationOutput } from "./provider/provider.types";
 
 /**
  * Runs in the worker process only. This is the sole place where a provider credential is decrypted
@@ -37,6 +42,8 @@ export class GenerationProcessor extends WorkerHost {
         private readonly wallet: WalletService,
         private readonly crypto: CryptoService,
         private readonly config: ConfigService,
+        private readonly apiKeys: ApiKeyService,
+        private readonly apiUsage: UsageRecorderService,
     ) {
         super();
     }
@@ -56,32 +63,57 @@ export class GenerationProcessor extends WorkerHost {
         try {
             const output = await this.execute(task);
             const fileIds = await this.persistOutputs(userId, output.binaries, task.capability);
-            const succeeded = task.capability === "text" ? (output.text ? 1 : 0) : fileIds.length;
-            const actual = await this.actualCost(task, succeeded, output.actualQuantity);
+            const outputCount = task.capability === "text" ? (output.text ? 1 : 0) : fileIds.length;
+            const params = task.params as Record<string, unknown>;
+            const actualQuantity =
+                output.actualQuantity ??
+                (task.capability === "video" && outputCount ? videoSecondsFromParams(params, task.quantity, outputCount) : undefined);
+            const billingMode = typeof params.billingMode === "string" ? params.billingMode : undefined;
+            // Recorded for every text task, not just token-billed ones: the open platform reports usage
+            // on `per_call` models too, and settlement simply ignores it there.
+            const settledUsage = task.capability === "text" ? (output.usage ?? localTextUsage(task, params, output.text)) : undefined;
+            const settled = settleGenerationTask({
+                capability: task.capability,
+                quantity: task.quantity,
+                estimatedCost: task.estimatedCost,
+                outputCount,
+                actualQuantity,
+                usageTokens: output.usageTokens,
+                estimatedTokens: asTokenCount(params.estimatedTokens),
+                upstreamUsdPerM: typeof params.upstreamUsdPerM === "string" ? params.upstreamUsdPerM : undefined,
+                billingMultiplier: typeof params.billingMultiplier === "string" ? params.billingMultiplier : undefined,
+                billingMode,
+                tokenPrices: tokenPricesFrom(params.tokenPrices),
+                // An upstream that hides usage still has to be billed, so the reply is measured locally.
+                usage: settledUsage,
+            });
 
             await this.db
                 .update(generationTasks)
                 .set({
-                    status: succeeded >= task.quantity ? "succeeded" : succeeded > 0 ? "partial" : "failed",
-                    succeededCount: succeeded,
-                    actualCost: actual,
+                    status: settled.status,
+                    succeededCount: settled.succeededCount,
+                    actualCost: settled.actualCost,
                     outputFileIds: fileIds,
                     outputText: output.text ?? "",
                     providerTaskId: output.providerTaskId ?? "",
+                    // Settled token counts belong on the task: the open platform reports them as `usage`.
+                    ...(settledUsage ? { params: { ...params, actualInputTokens: settledUsage.inputTokens, actualOutputTokens: settledUsage.outputTokens } } : {}),
                     finishedAt: new Date(),
                     updatedAt: new Date(),
                 })
                 .where(eq(generationTasks.id, taskId));
 
-            if (!succeeded) {
+            if (settled.status === "failed") {
                 await this.wallet.release({ userId, taskId, amount: task.estimatedCost, note: "生成失败退回" });
             } else {
-                await this.wallet.settle({ userId, taskId, frozenAmount: task.estimatedCost, actualAmount: actual });
+                await this.wallet.settle({ userId, taskId, frozenAmount: task.estimatedCost, actualAmount: settled.actualCost });
             }
-            await this.publishStatus(taskId, succeeded ? "succeeded" : "failed");
-            this.logger.log(`Task ${taskId} finished: ${succeeded}/${task.quantity} outputs, charged ${actual}`);
+            await this.recordOpenApiSettlement(task, params, settled, settledUsage);
+            await this.publishStatus(taskId, settled.status === "failed" ? "failed" : "succeeded");
+            this.logger.log(`Task ${taskId} finished: ${settled.succeededCount}/${task.quantity} billed, charged ${settled.actualCost}`);
         } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
+            const message = friendlySeedanceError(taskErrorMessage(error));
             await this.db
                 .update(generationTasks)
                 .set({ status: "failed", error: message.slice(0, 2000), finishedAt: new Date(), updatedAt: new Date() })
@@ -90,12 +122,56 @@ export class GenerationProcessor extends WorkerHost {
             await this.wallet.release({ userId, taskId, amount: task.estimatedCost, note: "生成失败退回" }).catch((releaseError) => {
                 this.logger.error(`Failed to release funds for task ${taskId}: ${String(releaseError)}`);
             });
+            await this.recordOpenApiSettlement(task, task.params as Record<string, unknown>, { status: "failed", succeededCount: 0, actualCost: "0.000000" }, undefined, message);
             await this.publishStatus(taskId, "failed", message);
             throw error;
         }
     }
 
-    private async execute(task: typeof generationTasks.$inferSelect) {
+    /**
+     * Key quota follows worker settlement rather than status polling. This is essential for async
+     * video: a client may never poll, or may poll a completed task many times.
+     */
+    private async recordOpenApiSettlement(
+        task: typeof generationTasks.$inferSelect,
+        params: Record<string, unknown>,
+        settled: GenerationSettlement,
+        usage?: { inputTokens: number; outputTokens: number },
+        error = "",
+    ) {
+        if (task.source !== "openapi") return;
+        const apiKeyId = typeof params.apiKeyId === "string" ? params.apiKeyId : "";
+        if (!apiKeyId) return;
+
+        await this.apiKeys.settleUsageReservation(apiKeyId, task.estimatedCost, settled.actualCost).catch((quotaError) => {
+            this.logger.error(`Failed to settle API-key quota for task ${task.id}: ${String(quotaError)}`);
+        });
+
+        if (params.apiUsageDeferred !== true) return;
+        await this.apiUsage.finalizeDeferred({
+            userId: task.userId,
+            apiKeyId,
+            taskId: task.id,
+            channelId: task.channelId,
+            endpoint: typeof params.apiEndpoint === "string" && params.apiEndpoint ? params.apiEndpoint : "/v1/videos",
+            capability: task.capability,
+            model: typeof params.apiModel === "string" && params.apiModel ? params.apiModel : task.modelName,
+            status: settled.status === "failed" ? "failed" : "success",
+            httpStatus: settled.status === "failed" ? 502 : 200,
+            errorCode: settled.status === "failed" ? "generation_failed" : "",
+            quantity: settled.succeededCount,
+            inputTokens: usage?.inputTokens ?? 0,
+            outputTokens: usage?.outputTokens ?? 0,
+            billedAmount: settled.actualCost,
+            multiplier: typeof params.billingMultiplier === "string" ? params.billingMultiplier : "1",
+            latencyMs: Math.max(0, Date.now() - task.createdAt.getTime()),
+            clientIp: typeof params.apiClientIp === "string" ? params.apiClientIp : "",
+            deferred: false,
+            ...(error ? { errorCode: "generation_failed" } : {}),
+        });
+    }
+
+    private async execute(task: typeof generationTasks.$inferSelect): Promise<GenerationOutput> {
         const [row] = await this.db
             .select({ channel: channels, model: channelModels })
             .from(channelModels)
@@ -129,6 +205,7 @@ export class GenerationProcessor extends WorkerHost {
             audioSpeed: String(params.audioSpeed ?? ""),
             audioInstructions: String(params.audioInstructions ?? ""),
             reasoningEffort: String(params.reasoningEffort ?? "auto"),
+            maxOutputTokens: asTokenCount(params.maxOutputTokens),
             aspectPresets: parseModelFeatures(row.model.features).aspectPresets,
         };
 
@@ -137,7 +214,13 @@ export class GenerationProcessor extends WorkerHost {
         // An admin script overrides the built-in dialect entirely.
         if (row.model.script.trim()) {
             const result = await this.scripts.run(row.model.script, credentials, request);
-            return { binaries: result.binaries, text: result.text, actualQuantity: result.binaries.length };
+            const actualQuantity =
+                task.capability === "video"
+                    ? result.binaries.length
+                        ? videoSecondsFromParams(params, task.quantity, result.binaries.length)
+                        : 0
+                    : result.binaries.length;
+            return { binaries: result.binaries, text: result.text, actualQuantity };
         }
 
         const adapter = this.providers.resolve(row.channel.apiFormat);
@@ -179,19 +262,6 @@ export class GenerationProcessor extends WorkerHost {
         return files.map((file) => file.id);
     }
 
-    /**
-     * Charge for what was actually produced. Per-second models bill on the reported duration when the
-     * provider gives one; otherwise the estimate stands.
-     */
-    private async actualCost(task: typeof generationTasks.$inferSelect, succeeded: number, actualQuantity?: number) {
-        if (!succeeded) return toMoneyString(0);
-        const quantity = actualQuantity ?? succeeded;
-        if (quantity >= task.quantity) return task.estimatedCost;
-        // Pro-rate: unit price is estimate / requested quantity.
-        const perUnit = mulMoney(task.estimatedCost, 1 / Math.max(1, task.quantity));
-        return toMoneyString(ceilMoney(mulMoney(perUnit, quantity)));
-    }
-
     private publishStatus(taskId: string, status: string, error?: string) {
         return this.redis.publish(statusChannel(taskId), JSON.stringify({ status, error: error ?? "" }));
     }
@@ -202,6 +272,43 @@ function fileNameFor(storageKey: string, mimeType: string) {
     const value = mimeType.toLowerCase();
     const ext = value.startsWith("video/") ? "mp4" : value.startsWith("audio/") ? "mp3" : value.includes("jpeg") ? "jpg" : value.includes("webp") ? "webp" : "png";
     return `${safe}.${ext}`;
+}
+
+function taskErrorMessage(error: unknown) {
+    if (error instanceof AppError) {
+        const body = error.getResponse();
+        if (body && typeof body === "object" && "message" in body && typeof (body as { message: unknown }).message === "string") {
+            return (body as { message: string }).message;
+        }
+    }
+    return error instanceof Error ? error.message : String(error);
+}
+
+function asTokenCount(value: unknown) {
+    const n = typeof value === "number" ? value : typeof value === "string" && value.trim() ? Number(value) : NaN;
+    if (!Number.isFinite(n) || n < 1) return undefined;
+    return Math.floor(n);
+}
+
+function tokenPricesFrom(value: unknown) {
+    if (!value || typeof value !== "object") return undefined;
+    const record = value as Record<string, unknown>;
+    const input = typeof record.input === "string" ? record.input : "";
+    const output = typeof record.output === "string" ? record.output : "";
+    if (!input && !output) return undefined;
+    return { input: input || "0", output: output || "0" };
+}
+
+/**
+ * Fallback usage for providers that stream text without a usage event. Input reuses the count taken
+ * at submit time (the same number the freeze used) so billing stays self-consistent; output is
+ * measured from the text we actually received.
+ */
+function localTextUsage(task: typeof generationTasks.$inferSelect, params: Record<string, unknown>, text: string | undefined) {
+    return {
+        inputTokens: asTokenCount(params.inputTokens) ?? countTextTokens(task.prompt, task.modelName),
+        outputTokens: countTextTokens(text ?? "", task.modelName),
+    };
 }
 
 function guessImageMime(url: string) {

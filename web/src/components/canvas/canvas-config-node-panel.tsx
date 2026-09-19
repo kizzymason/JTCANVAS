@@ -7,7 +7,7 @@ import { ModelPicker } from "@/components/model-picker";
 import { PriceEstimate } from "@/components/price-estimate";
 import { pricingSpecFor } from "@/lib/pricing-spec";
 import { videoPricingSpecFor } from "@/lib/video-pricing-spec";
-import { defaultConfig, resolveModelForCapability, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
+import { defaultConfig, modelOptionName, resolveModelForCapability, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { CanvasImageSettingsPopover } from "./canvas-image-settings-popover";
@@ -118,8 +118,8 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, onConfigC
                 <PriceEstimate
                     model={config.model}
                     count={mode === "image" ? Number(config.count) || 1 : 1}
-                    seconds={mode === "video" ? Math.max(1, Number(config.videoSeconds) || 1) : undefined}
-                    spec={mode === "image" ? pricingSpecFor(config.quality, config.size) : mode === "video" ? videoPricingSpecFor(config.vquality, inputSummary.videoCount > 0) : undefined}
+                    seconds={mode === "video" ? Math.max(4, Number(config.videoSeconds) || 4) : undefined}
+                    spec={mode === "image" ? pricingSpecFor(config.quality, config.size) : mode === "video" ? videoPricingSpecFor(config.vquality, inputSummary.videoCount > 0, modelOptionName(config.model)) : undefined}
                     referenceCount={mode === "image" ? inputSummary.imageCount : undefined}
                 />
             </div>

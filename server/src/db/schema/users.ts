@@ -1,7 +1,7 @@
 import { index, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { createdAt, updatedAt } from "./_shared";
 
-export const userRole = pgEnum("user_role", ["user", "admin"]);
+export const userRole = pgEnum("user_role", ["user", "admin", "reseller"]);
 export const userStatus = pgEnum("user_status", ["active", "disabled"]);
 
 export const users = pgTable(

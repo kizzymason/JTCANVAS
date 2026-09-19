@@ -24,14 +24,13 @@ export function MobileNavDrawer({ open, activeToolSlug, onClose }: MobileNavDraw
         <Drawer title={t("topNav.navigation")} placement="left" size={280} open={open} onClose={onClose} className="md:hidden">
             <div className="space-y-1">
                 {tools.map((tool) => {
-                    const Icon = tool.icon;
                     const active = tool.slug === activeToolSlug;
                     return (
                         <Link
                             key={tool.slug}
-                            to={`/${tool.slug}`}
+                            to={tool.path}
                             onClick={(event) => {
-                                if (!user && requireAuth(`/${tool.slug}`)) {
+                                if (!user && requireAuth(tool.path)) {
                                     event.preventDefault();
                                     onClose();
                                     return;
@@ -39,11 +38,11 @@ export function MobileNavDrawer({ open, activeToolSlug, onClose }: MobileNavDraw
                                 onClose();
                             }}
                             className={cn(
-                                "flex items-center gap-3 rounded-lg px-3 py-3.5 text-lg transition",
-                                active ? "bg-stone-100 font-medium text-stone-950 dark:bg-stone-800 dark:text-stone-100" : "text-stone-600 hover:bg-stone-100 hover:text-stone-950 dark:text-stone-300 dark:hover:bg-stone-800 dark:hover:text-stone-100",
+                                "flex items-center gap-3 rounded-lg px-3 py-3.5 text-lg transition-colors duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                                active ? "bg-stone-100 font-medium text-stone-950 dark:bg-stone-800 dark:text-stone-100" : "text-stone-600 hover:bg-stone-100/80 hover:text-stone-800 dark:text-stone-300 dark:hover:bg-stone-800/80 dark:hover:text-stone-100",
                             )}
                         >
-                            <Icon className="size-6" />
+                            <img src={tool.icon} alt="" aria-hidden className="size-7 shrink-0 object-contain" draggable={false} />
                             <span>{t(`navigation.${tool.slug}`)}</span>
                         </Link>
                     );

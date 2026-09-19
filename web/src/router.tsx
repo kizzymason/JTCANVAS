@@ -5,7 +5,8 @@ import { createBrowserRouter, Outlet } from "react-router-dom";
 import { AccountRouteRedirect } from "@/components/account/account-drawer";
 import { AuthModal } from "@/components/auth/auth-modal";
 import { AnalyticsTracker } from "@/components/layout/analytics-tracker";
-import { LoginRouteRedirect, RequireAdmin, RequireAuth, RequireSiteService } from "@/components/layout/route-guards";
+import { RouteErrorFallback } from "@/components/layout/route-error-fallback";
+import { LoginRouteRedirect, RequireAdmin, RequireAuth, RequireReseller, RequireSiteService } from "@/components/layout/route-guards";
 import UserLayout from "@/layouts/user-layout";
 import HomePage from "@/pages/home";
 import NotFound from "@/pages/not-found";
@@ -33,7 +34,22 @@ const AdminServicesPage = lazy(() => import("@/pages/admin/services"));
 const AdminPiapiPage = lazy(() => import("@/pages/admin/piapi"));
 const AdminAuditPage = lazy(() => import("@/pages/admin/audit"));
 const AdminSettingsPage = lazy(() => import("@/pages/admin/settings"));
+const AdminAnnouncementsPage = lazy(() => import("@/pages/admin/announcements"));
 const AdminDocsPage = lazy(() => import("@/pages/admin/docs"));
+const AdminResellersPage = lazy(() => import("@/pages/admin/resellers"));
+const AdminResellerTiersPage = lazy(() => import("@/pages/admin/reseller-tiers"));
+const OpenPlatformLayout = lazy(() => import("@/layouts/open-platform-layout"));
+const OpenLandingPage = lazy(() => import("@/pages/open"));
+const OpenDocsPage = lazy(() => import("@/pages/open/docs"));
+const OpenConsoleDashboardPage = lazy(() => import("@/pages/open/console"));
+const OpenConsoleTokensPage = lazy(() => import("@/pages/open/console/tokens"));
+const OpenConsoleLogsPage = lazy(() => import("@/pages/open/console/logs"));
+const OpenConsoleModelsPage = lazy(() => import("@/pages/open/console/models"));
+const OpenConsoleProfilePage = lazy(() => import("@/pages/open/console/profile"));
+const OpenConsoleDocsPage = lazy(() => import("@/pages/open/console/docs"));
+const AdminCardShopPage = lazy(() => import("@/pages/admin/card-shop"));
+const CardShopPage = lazy(() => import("@/pages/cards"));
+const CardOrdersPage = lazy(() => import("@/pages/cards/orders"));
 
 function Loading() {
     return (
@@ -59,6 +75,7 @@ function AppShell() {
 export const router = createBrowserRouter([
     {
         element: <AppShell />,
+        errorElement: <RouteErrorFallback />,
         children: [
             // Public: the marketing homepage. Login/register is a dialog, not a standalone page.
             {
@@ -68,11 +85,41 @@ export const router = createBrowserRouter([
                         <Outlet />
                     </UserLayout>
                 ),
-                children: [{ path: "/", element: <HomePage /> }],
+                children: [
+                    { path: "/", element: <HomePage /> },
+                    // The API reference is public on purpose: downstream engineers evaluate before applying.
+                    {
+                        path: "/open/docs",
+                        element: (
+                            <Lazy>
+                                <OpenDocsPage />
+                            </Lazy>
+                        ),
+                    },
+                ],
             },
             {
                 path: "/login",
                 element: <LoginRouteRedirect />,
+            },
+
+            // Private-channel card storefront: direct link only, no account and no site chrome, so it
+            // deliberately sits outside UserLayout and never appears in the navigation.
+            {
+                path: "/cards",
+                element: (
+                    <Lazy>
+                        <CardShopPage />
+                    </Lazy>
+                ),
+            },
+            {
+                path: "/cards/orders",
+                element: (
+                    <Lazy>
+                        <CardOrdersPage />
+                    </Lazy>
+                ),
             },
 
             // Signed-in users.
@@ -86,12 +133,123 @@ export const router = createBrowserRouter([
                     </RequireAuth>
                 ),
                 children: [
-                    { path: "/canvas", element: <Lazy><CanvasPage /></Lazy> },
-                    { path: "/canvas/:id", element: <Lazy><CanvasProjectPage /></Lazy> },
-                    { path: "/image", element: <RequireSiteService service="image"><Lazy><ImagePage /></Lazy></RequireSiteService> },
-                    { path: "/video", element: <RequireSiteService service="video"><Lazy><VideoPage /></Lazy></RequireSiteService> },
-                    { path: "/assets", element: <Lazy><AssetsPage /></Lazy> },
+                    {
+                        path: "/canvas",
+                        element: (
+                            <Lazy>
+                                <CanvasPage />
+                            </Lazy>
+                        ),
+                    },
+                    {
+                        path: "/canvas/:id",
+                        element: (
+                            <Lazy>
+                                <CanvasProjectPage />
+                            </Lazy>
+                        ),
+                    },
+                    {
+                        path: "/image",
+                        element: (
+                            <RequireSiteService service="image">
+                                <Lazy>
+                                    <ImagePage />
+                                </Lazy>
+                            </RequireSiteService>
+                        ),
+                    },
+                    {
+                        path: "/video",
+                        element: (
+                            <RequireSiteService service="video">
+                                <Lazy>
+                                    <VideoPage />
+                                </Lazy>
+                            </RequireSiteService>
+                        ),
+                    },
+                    {
+                        path: "/assets",
+                        element: (
+                            <Lazy>
+                                <AssetsPage />
+                            </Lazy>
+                        ),
+                    },
+                    {
+                        path: "/open",
+                        element: (
+                            <RequireSiteService service="openPlatform">
+                                <Lazy>
+                                    <OpenLandingPage />
+                                </Lazy>
+                            </RequireSiteService>
+                        ),
+                    },
                     { path: "/account", element: <AccountRouteRedirect /> },
+                ],
+            },
+
+            // Approved resellers only; the open platform console has its own left-sidebar shell.
+            {
+                path: "/open/console",
+                element: (
+                    <RequireReseller>
+                        <Lazy>
+                            <OpenPlatformLayout />
+                        </Lazy>
+                    </RequireReseller>
+                ),
+                children: [
+                    {
+                        index: true,
+                        element: (
+                            <Lazy>
+                                <OpenConsoleDashboardPage />
+                            </Lazy>
+                        ),
+                    },
+                    {
+                        path: "tokens",
+                        element: (
+                            <Lazy>
+                                <OpenConsoleTokensPage />
+                            </Lazy>
+                        ),
+                    },
+                    {
+                        path: "logs",
+                        element: (
+                            <Lazy>
+                                <OpenConsoleLogsPage />
+                            </Lazy>
+                        ),
+                    },
+                    {
+                        path: "models",
+                        element: (
+                            <Lazy>
+                                <OpenConsoleModelsPage />
+                            </Lazy>
+                        ),
+                    },
+                    {
+                        path: "profile",
+                        element: (
+                            <Lazy>
+                                <OpenConsoleProfilePage />
+                            </Lazy>
+                        ),
+                    },
+                    {
+                        path: "docs",
+                        element: (
+                            <Lazy>
+                                <OpenConsoleDocsPage />
+                            </Lazy>
+                        ),
+                    },
                 ],
             },
 
@@ -106,22 +264,166 @@ export const router = createBrowserRouter([
                     </RequireAdmin>
                 ),
                 children: [
-                    { index: true, element: <Lazy><AdminOverviewPage /></Lazy> },
-                    { path: "visitors", element: <Lazy><AdminVisitorsPage /></Lazy> },
-                    { path: "users", element: <Lazy><AdminUsersPage /></Lazy> },
-                    { path: "channels", element: <Lazy><AdminChannelsPage /></Lazy> },
-                    { path: "pricing", element: <Lazy><AdminPricingPage /></Lazy> },
-                    { path: "finance", element: <Lazy><AdminFinancePage /></Lazy> },
-                    { path: "cards", element: <Lazy><AdminCardsPage /></Lazy> },
-                    { path: "payments", element: <Lazy><AdminPaymentsPage /></Lazy> },
-                    { path: "packages", element: <Lazy><AdminPackagesPage /></Lazy> },
-                    { path: "tasks", element: <Lazy><AdminTasksPage /></Lazy> },
-                    { path: "storage", element: <Lazy><AdminStoragePage /></Lazy> },
-                    { path: "services", element: <Lazy><AdminServicesPage /></Lazy> },
-                    { path: "piapi", element: <Lazy><AdminPiapiPage /></Lazy> },
-                    { path: "audit", element: <Lazy><AdminAuditPage /></Lazy> },
-                    { path: "settings", element: <Lazy><AdminSettingsPage /></Lazy> },
-                    { path: "docs", element: <Lazy><AdminDocsPage /></Lazy> },
+                    {
+                        index: true,
+                        element: (
+                            <Lazy>
+                                <AdminOverviewPage />
+                            </Lazy>
+                        ),
+                    },
+                    {
+                        path: "visitors",
+                        element: (
+                            <Lazy>
+                                <AdminVisitorsPage />
+                            </Lazy>
+                        ),
+                    },
+                    {
+                        path: "users",
+                        element: (
+                            <Lazy>
+                                <AdminUsersPage />
+                            </Lazy>
+                        ),
+                    },
+                    {
+                        path: "channels",
+                        element: (
+                            <Lazy>
+                                <AdminChannelsPage />
+                            </Lazy>
+                        ),
+                    },
+                    {
+                        path: "pricing",
+                        element: (
+                            <Lazy>
+                                <AdminPricingPage />
+                            </Lazy>
+                        ),
+                    },
+                    {
+                        path: "finance",
+                        element: (
+                            <Lazy>
+                                <AdminFinancePage />
+                            </Lazy>
+                        ),
+                    },
+                    {
+                        path: "cards",
+                        element: (
+                            <Lazy>
+                                <AdminCardsPage />
+                            </Lazy>
+                        ),
+                    },
+                    {
+                        path: "payments",
+                        element: (
+                            <Lazy>
+                                <AdminPaymentsPage />
+                            </Lazy>
+                        ),
+                    },
+                    {
+                        path: "packages",
+                        element: (
+                            <Lazy>
+                                <AdminPackagesPage />
+                            </Lazy>
+                        ),
+                    },
+                    {
+                        path: "tasks",
+                        element: (
+                            <Lazy>
+                                <AdminTasksPage />
+                            </Lazy>
+                        ),
+                    },
+                    {
+                        path: "storage",
+                        element: (
+                            <Lazy>
+                                <AdminStoragePage />
+                            </Lazy>
+                        ),
+                    },
+                    {
+                        path: "services",
+                        element: (
+                            <Lazy>
+                                <AdminServicesPage />
+                            </Lazy>
+                        ),
+                    },
+                    {
+                        path: "piapi",
+                        element: (
+                            <Lazy>
+                                <AdminPiapiPage />
+                            </Lazy>
+                        ),
+                    },
+                    {
+                        path: "audit",
+                        element: (
+                            <Lazy>
+                                <AdminAuditPage />
+                            </Lazy>
+                        ),
+                    },
+                    {
+                        path: "settings",
+                        element: (
+                            <Lazy>
+                                <AdminSettingsPage />
+                            </Lazy>
+                        ),
+                    },
+                    {
+                        path: "announcements",
+                        element: (
+                            <Lazy>
+                                <AdminAnnouncementsPage />
+                            </Lazy>
+                        ),
+                    },
+                    {
+                        path: "docs",
+                        element: (
+                            <Lazy>
+                                <AdminDocsPage />
+                            </Lazy>
+                        ),
+                    },
+                    {
+                        path: "resellers",
+                        element: (
+                            <Lazy>
+                                <AdminResellersPage />
+                            </Lazy>
+                        ),
+                    },
+                    {
+                        path: "reseller-tiers",
+                        element: (
+                            <Lazy>
+                                <AdminResellerTiersPage />
+                            </Lazy>
+                        ),
+                    },
+                    {
+                        path: "card-shop",
+                        element: (
+                            <Lazy>
+                                <AdminCardShopPage />
+                            </Lazy>
+                        ),
+                    },
                 ],
             },
 

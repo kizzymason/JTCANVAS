@@ -36,6 +36,8 @@ export type GenerationRequest = {
     audioSpeed?: string;
     audioInstructions?: string;
     reasoningEffort?: string;
+    /** Hard output ceiling for token-billed text, forwarded upstream so the freeze stays a true bound. */
+    maxOutputTokens?: number;
     signal?: AbortSignal;
 };
 
@@ -56,6 +58,10 @@ export type GenerationOutput = {
     text?: string;
     /** Actual billable units, when the provider reports something different from the request. */
     actualQuantity?: number;
+    /** Upstream completion tokens, used to settle Seedance against the per-second freeze. */
+    usageTokens?: number;
+    /** Split token usage for `per_token` models, taken from the upstream's own accounting. */
+    usage?: { inputTokens: number; outputTokens: number };
     providerTaskId?: string;
 };
 

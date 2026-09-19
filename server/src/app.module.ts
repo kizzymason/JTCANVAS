@@ -28,6 +28,10 @@ import { StorageModule } from "./modules/storage/storage.module";
 import { VisitorsModule } from "./modules/visitors/visitors.module";
 import { WalletModule } from "./modules/wallet/wallet.module";
 import { PaymentsModule } from "./modules/payments/payments.module";
+import { AnnouncementsModule } from "./modules/announcements/announcements.module";
+import { CardsModule } from "./modules/cards/cards.module";
+import { OpenApiModule } from "./modules/openapi/openapi.module";
+import { ResellerModule } from "./modules/reseller/reseller.module";
 
 /** Shared by the API process and the worker; the worker adds the queue processor on top. */
 @Module({
@@ -71,6 +75,10 @@ import { PaymentsModule } from "./modules/payments/payments.module";
         AssetsModule,
         VisitorsModule,
         PaymentsModule,
+        AnnouncementsModule,
+        CardsModule,
+        OpenApiModule,
+        ResellerModule,
         AdminModule,
     ],
     controllers: [HealthController],

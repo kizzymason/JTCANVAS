@@ -1,0 +1,2 @@
+ALTER TABLE "api_request_logs" ADD COLUMN "settled_at" timestamp with time zone;--> statement-breakpoint
+CREATE UNIQUE INDEX "api_request_logs_task_unique" ON "api_request_logs" USING btree ("task_id");

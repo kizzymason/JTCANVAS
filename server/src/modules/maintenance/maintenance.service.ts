@@ -1,8 +1,13 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { Cron, CronExpression } from "@nestjs/schedule";
 import { and, eq, isNull, lt, sql } from "drizzle-orm";
 import { DB, type Database } from "../../db/db.module";
 import { files, generationTasks, idempotencyKeys, sessions } from "../../db/schema";
+import { MerchantCommissionService } from "../cards/merchant-commission.service";
+import { MerchantWebhookService } from "../cards/merchant-webhook.service";
+import { ApiKeyService } from "../openapi/api-key.service";
+import { pruneApiRequestLogs } from "../openapi/usage-recorder.service";
 import { pruneVisitorEvents } from "../visitors/visitors.service";
 import { StorageService } from "../storage/storage.service";
 import { WalletService } from "../wallet/wallet.service";
@@ -14,8 +19,12 @@ export class MaintenanceService {
 
     constructor(
         @Inject(DB) private readonly db: Database,
+        private readonly config: ConfigService,
         private readonly storage: StorageService,
         private readonly wallet: WalletService,
+        private readonly apiKeys: ApiKeyService,
+        private readonly merchantCommission: MerchantCommissionService,
+        private readonly merchantWebhooks: MerchantWebhookService,
     ) {}
 
     /** Deletes files nothing points at any more, one owner at a time. */
@@ -52,6 +61,13 @@ export class MaintenanceService {
             await this.wallet.release({ userId: task.userId, taskId: task.id, amount: task.estimatedCost, note: "任务超时自动退回" }).catch((error) => {
                 this.logger.error(`Failed to release stale freeze for ${task.id}: ${String(error)}`);
             });
+            const params = task.params as Record<string, unknown>;
+            const apiKeyId = typeof params.apiKeyId === "string" ? params.apiKeyId : "";
+            if (task.source === "openapi" && apiKeyId) {
+                await this.apiKeys.settleUsageReservation(apiKeyId, task.estimatedCost, "0").catch((error) => {
+                    this.logger.error(`Failed to release stale API-key quota for ${task.id}: ${String(error)}`);
+                });
+            }
         }
         if (stale.length) this.logger.warn(`Released ${stale.length} stale freezes`);
     }
@@ -62,6 +78,23 @@ export class MaintenanceService {
         const mismatches = await this.wallet.reconcileAll();
         if (mismatches.length) this.logger.error(`Wallet reconciliation found ${mismatches.length} mismatches: ${JSON.stringify(mismatches.slice(0, 10))}`);
         else this.logger.log("Wallet reconciliation clean");
+
+        // Channel commission follows the same invariant: the ledger must sum to the balance.
+        const commissionMismatches = await this.merchantCommission.reconcileAll();
+        if (commissionMismatches.length) {
+            this.logger.error(`Channel commission reconciliation found ${commissionMismatches.length} mismatches: ${JSON.stringify(commissionMismatches.slice(0, 10))}`);
+        } else {
+            this.logger.log("Channel commission reconciliation clean");
+        }
+    }
+
+    /**
+     * Cuts off sales channels whose refunds are running hot. Runs here rather than on the sales path
+     * because it is a rolling judgement over 30 days, and because the account it protects is ours.
+     */
+    @Cron(CronExpression.EVERY_HOUR)
+    async guardChannelRefundRate() {
+        await this.merchantWebhooks.enforceRefundGuard();
     }
 
     /** Expired sessions and consumed idempotency keys have no value after a day. */
@@ -71,5 +104,6 @@ export class MaintenanceService {
         await this.db.delete(sessions).where(lt(sessions.expiresAt, new Date()));
         await this.db.delete(idempotencyKeys).where(and(lt(idempotencyKeys.createdAt, dayAgo), sql`${idempotencyKeys.responseBody} is not null`));
         await pruneVisitorEvents(this.db);
+        await pruneApiRequestLogs(this.db, this.config.get<number>("openPlatform.logRetentionDays") ?? 90);
     }
 }

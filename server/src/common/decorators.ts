@@ -23,8 +23,15 @@ export type AuditMeta = { action: string; targetType?: string };
 /** Records the call in audit_logs once it succeeds. Use on every privileged mutation. */
 export const Audit = (meta: AuditMeta) => SetMetadata(AUDIT_KEY, meta);
 
-/** Requires an Idempotency-Key header and replays the stored response for repeats. */
-export const Idempotent = (scope: string) => SetMetadata(IDEMPOTENT_KEY, scope);
+export type IdempotentMeta = { scope: string; optional: boolean };
+
+/**
+ * Replays the stored response when the same Idempotency-Key comes back. The header is mandatory by
+ * default; open-platform endpoints mark it optional because the OpenAI protocol does not require it
+ * and a downstream SDK will not send one.
+ */
+export const Idempotent = (scope: string, opts?: { optional?: boolean }) =>
+    SetMetadata(IDEMPOTENT_KEY, { scope, optional: opts?.optional ?? false } satisfies IdempotentMeta);
 
 export const CurrentUser = createParamDecorator((_data: unknown, context: ExecutionContext): AuthUser => {
     const request = context.switchToHttp().getRequest<RequestWithUser>();

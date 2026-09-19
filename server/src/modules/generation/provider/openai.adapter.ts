@@ -8,6 +8,7 @@ import {
     SEEDANCE_CREATE_PATHS,
     SEEDANCE_ENDPOINT_MISSING,
     asRecord,
+    friendlySeedanceError,
     isSeedanceFailedStatus,
     isSeedanceSucceededStatus,
     seedanceCreateBody,
@@ -15,7 +16,9 @@ import {
     videoErrorMessage,
     videoResultUrl,
     videoTaskId,
+    videoUsageTokens,
 } from "./seedance-video";
+import { isWhatsTokenDurationVideoModel, whatsTokenDurationVideoRequiresRatio, whatsTokenDurationVideoResolution } from "../whatstoken-catalog";
 
 const VIDEO_POLL_INTERVAL_MS = 2500;
 const VIDEO_MAX_ATTEMPTS = 720; // 30 minutes at 2.5s.
@@ -115,7 +118,7 @@ export class OpenAiAdapter extends ProviderAdapter {
         const created = await http.post<VideoApiResponse>("/v1/videos", form);
         const taskId = created.data?.id;
         if (!taskId) throw badRequest("NO_VIDEO_TASK_ID", created.data?.error?.message || "视频接口没有返回任务 ID");
-        return this.pollOpenAiVideo(http, taskId, request.signal);
+        return this.pollOpenAiVideo(http, taskId, request.signal, request.seconds);
     }
 
     /**
@@ -132,6 +135,8 @@ export class OpenAiAdapter extends ProviderAdapter {
             size: request.size,
             generateAudio: request.generateAudio,
             watermark: request.watermark,
+            upstreamResolution: whatsTokenDurationVideoResolution(request.model, request.resolution),
+            requireRatio: whatsTokenDurationVideoRequiresRatio(request.model),
             references: request.references.slice(0, 7).map((reference) => ({
                 mimeType: reference.mimeType,
                 url: publicOrDataUrl(reference),
@@ -145,7 +150,7 @@ export class OpenAiAdapter extends ProviderAdapter {
                 const taskId = videoTaskId(created.data);
                 if (!taskId) throw badRequest("NO_VIDEO_TASK_ID", videoErrorMessage(created.data) || "视频接口没有返回任务 ID");
                 this.logger.log(`Seedance ${request.model} submitted via ${path} as ${taskId}`);
-                return this.pollSeedanceVideo(http, taskId, request.signal);
+                return this.pollSeedanceVideo(http, taskId, request.signal, request.seconds);
             } catch (error) {
                 if (error instanceof AppError) throw error;
                 if (!isMissingEndpoint(error)) throw providerHttpError(error);
@@ -156,35 +161,35 @@ export class OpenAiAdapter extends ProviderAdapter {
         throw badRequest("VIDEO_ENDPOINT_NOT_FOUND", providerHttpMessage(lastMissing) || SEEDANCE_ENDPOINT_MISSING);
     }
 
-    private async pollOpenAiVideo(http: AxiosInstance, taskId: string, signal?: AbortSignal): Promise<GenerationOutput> {
+    private async pollOpenAiVideo(http: AxiosInstance, taskId: string, signal?: AbortSignal, seconds?: number): Promise<GenerationOutput> {
         for (let attempt = 0; attempt < VIDEO_MAX_ATTEMPTS; attempt += 1) {
             throwIfAborted(signal);
             await delay(VIDEO_POLL_INTERVAL_MS, signal);
             const polled = await http.get<VideoApiResponse>(`/v1/videos/${encodeURIComponent(taskId)}`);
             const status = (polled.data?.status || "").toLowerCase();
-            if (status === "failed" || status === "error") throw badRequest("VIDEO_FAILED", polled.data?.error?.message || "视频生成失败");
+            if (status === "failed" || status === "error") throw badRequest("VIDEO_FAILED", friendlySeedanceError(polled.data?.error?.message || "视频生成失败"));
             if (status !== "completed" && status !== "succeeded") continue;
 
             const directUrl = polled.data?.url || polled.data?.result_url || polled.data?.video_url;
             const binary = directUrl ? await fetchBinary(directUrl, signal) : await this.videoContent(http, taskId, signal);
-            return { binaries: [binary], providerTaskId: taskId };
+            return { binaries: [binary], providerTaskId: taskId, actualQuantity: seconds, usageTokens: videoUsageTokens(polled.data as Record<string, unknown>) };
         }
         throw badRequest("VIDEO_TIMEOUT", "视频生成超时，请稍后重试");
     }
 
-    private async pollSeedanceVideo(http: AxiosInstance, taskId: string, signal?: AbortSignal): Promise<GenerationOutput> {
+    private async pollSeedanceVideo(http: AxiosInstance, taskId: string, signal?: AbortSignal, seconds?: number): Promise<GenerationOutput> {
         for (let attempt = 0; attempt < VIDEO_MAX_ATTEMPTS; attempt += 1) {
             throwIfAborted(signal);
             await delay(VIDEO_POLL_INTERVAL_MS, signal);
             const payload = await readSeedanceTask(http, taskId, signal);
             const status = String(payload.status || "");
-            if (isSeedanceFailedStatus(status)) throw badRequest("VIDEO_FAILED", videoErrorMessage(payload) || "视频生成失败");
+            if (isSeedanceFailedStatus(status)) throw badRequest("VIDEO_FAILED", friendlySeedanceError(videoErrorMessage(payload) || "视频生成失败"));
             const url = videoResultUrl(payload);
             if (!url) {
                 if (!status || !isSeedanceSucceededStatus(status)) continue;
                 throw badRequest("NO_VIDEO_RETURNED", "视频任务完成但没有返回文件");
             }
-            return { binaries: [await fetchBinary(url, signal)], providerTaskId: taskId };
+            return { binaries: [await fetchBinary(url, signal)], providerTaskId: taskId, actualQuantity: seconds, usageTokens: videoUsageTokens(payload) };
         }
         throw badRequest("VIDEO_TIMEOUT", "视频生成超时，请稍后重试");
     }
@@ -224,6 +229,8 @@ export class OpenAiAdapter extends ProviderAdapter {
                     { role: "user", content: request.prompt },
                 ],
                 stream: true,
+                // Sent whenever the caller set a ceiling: token billing freezes against this number.
+                ...(request.maxOutputTokens ? { max_output_tokens: request.maxOutputTokens } : {}),
                 ...(request.reasoningEffort && request.reasoningEffort !== "auto" ? { reasoning: { effort: request.reasoningEffort } } : {}),
             },
             { responseType: "stream" },
@@ -231,6 +238,7 @@ export class OpenAiAdapter extends ProviderAdapter {
 
         let text = "";
         let buffer = "";
+        let usage: GenerationOutput["usage"];
         await new Promise<void>((resolve, reject) => {
             response.data.on("data", (chunk: Buffer) => {
                 buffer += chunk.toString("utf8");
@@ -240,6 +248,8 @@ export class OpenAiAdapter extends ProviderAdapter {
                     if (!line.startsWith("data:")) continue;
                     const payload = line.slice(5).trim();
                     if (!payload || payload === "[DONE]") continue;
+                    // Token billing settles on this, so it is read from the same stream as the text.
+                    usage = extractTextUsage(payload) ?? usage;
                     const delta = extractDelta(payload);
                     if (!delta) continue;
                     text += delta;
@@ -251,7 +261,7 @@ export class OpenAiAdapter extends ProviderAdapter {
         });
 
         if (!text.trim()) throw badRequest("NO_CONTENT", "模型没有返回内容");
-        return { binaries: [], text };
+        return { binaries: [], text, usage };
     }
 
     private async readImages(payload: ImageApiResponse): Promise<GeneratedBinary[]> {
@@ -313,6 +323,32 @@ function extractDelta(payload: string) {
     }
 }
 
+/**
+ * Usage arrives on the terminal `response.completed` event. Field names differ between the Responses
+ * API (`input_tokens`) and chat-style aggregators (`prompt_tokens`), so both spellings are accepted.
+ */
+export function extractTextUsage(payload: string): { inputTokens: number; outputTokens: number } | undefined {
+    try {
+        const event = JSON.parse(payload) as { usage?: Record<string, unknown>; response?: { usage?: Record<string, unknown> } };
+        const usage = event.response?.usage ?? event.usage;
+        if (!usage) return undefined;
+        const inputTokens = tokenField(usage, "input_tokens", "prompt_tokens");
+        const outputTokens = tokenField(usage, "output_tokens", "completion_tokens");
+        if (inputTokens === 0 && outputTokens === 0) return undefined;
+        return { inputTokens, outputTokens };
+    } catch {
+        return undefined;
+    }
+}
+
+function tokenField(usage: Record<string, unknown>, ...names: string[]) {
+    for (const name of names) {
+        const value = usage[name];
+        if (typeof value === "number" && Number.isFinite(value) && value >= 0) return Math.floor(value);
+    }
+    return 0;
+}
+
 export async function fetchBinary(url: string, signal?: AbortSignal): Promise<GeneratedBinary> {
     const response = await axios.get<ArrayBuffer>(url, { responseType: "arraybuffer", signal, timeout: 0, maxContentLength: Infinity });
     return { body: Buffer.from(response.data), mimeType: String(response.headers["content-type"] || "application/octet-stream") };
@@ -341,8 +377,13 @@ function isSeedreamModel(model: string) {
     return model.toLowerCase().includes("seedream");
 }
 
+/**
+ * Which video models go to `/v1/video/generations` instead of the Sora-style multipart endpoint.
+ * The relay's duration-priced models (MiniMax, HappyHorse) share that endpoint with Seedance; the
+ * Sora paths 404 there, so anything served by this relay has to be routed the same way.
+ */
 function isSeedanceModel(model: string) {
-    return model.toLowerCase().includes("seedance");
+    return model.toLowerCase().includes("seedance") || isWhatsTokenDurationVideoModel(model);
 }
 
 function dataUrlOf(body: Buffer, mimeType: string) {
@@ -369,7 +410,7 @@ function providerHttpMessage(error: unknown) {
 }
 
 function providerHttpError(error: unknown): never {
-    throw badRequest("PROVIDER_ERROR", providerHttpMessage(error) || "上游视频接口请求失败");
+    throw badRequest("PROVIDER_ERROR", friendlySeedanceError(providerHttpMessage(error) || "上游视频接口请求失败"));
 }
 
 async function readSeedanceTask(http: AxiosInstance, taskId: string, signal?: AbortSignal) {

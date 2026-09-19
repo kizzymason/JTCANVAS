@@ -47,6 +47,13 @@ export function mulMoney(a: MoneyInput, factor: MoneyInput) {
     return money(a).times(money(factor));
 }
 
+/** Clamps a derived amount against a ceiling, e.g. so a commission cannot exceed what was collected. */
+export function minMoney(a: MoneyInput, b: MoneyInput) {
+    const left = money(a);
+    const right = money(b);
+    return left.lte(right) ? left : right;
+}
+
 /** Display value for UI and exports: two decimals is the CNY convention. */
 export function formatMoney(value: MoneyInput) {
     return money(value).toFixed(2, Decimal.ROUND_HALF_UP);

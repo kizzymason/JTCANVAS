@@ -6,7 +6,8 @@ export type ImageResolution = (typeof IMAGE_RESOLUTIONS)[number];
 
 export const IMAGE_ASPECT_RATIOS = defaultAspectPresets().map((item) => item.ratio);
 export const DEFAULT_MAX_COUNT = 15;
-export const DEFAULT_VIDEO_RESOLUTIONS = ["480", "720"];
+export const DEFAULT_VIDEO_RESOLUTIONS = ["720", "480"];
+export const DEFAULT_MIN_SECONDS = 4;
 export const DEFAULT_MAX_SECONDS = 20;
 
 export type ModelFeatures = {
@@ -16,6 +17,7 @@ export type ModelFeatures = {
     aspectRatios: string[];
     aspectPresets: AspectPreset[];
     videoResolutions: string[];
+    minSeconds: number;
     maxSeconds: number;
 };
 
@@ -26,6 +28,7 @@ export const DEFAULT_MODEL_FEATURES: ModelFeatures = {
     aspectPresets: defaultAspectPresets(),
     aspectRatios: IMAGE_ASPECT_RATIOS,
     videoResolutions: [...DEFAULT_VIDEO_RESOLUTIONS],
+    minSeconds: DEFAULT_MIN_SECONDS,
     maxSeconds: DEFAULT_MAX_SECONDS,
 };
 
@@ -40,6 +43,7 @@ export function modelFeaturesOf(model: PublicModel | undefined): ModelFeatures {
         aspectPresets,
         aspectRatios: aspectPresets.map((item) => item.ratio),
         videoResolutions: pickVideoResolutions(raw.videoResolutions),
+        minSeconds: clampInt(raw.minSeconds, 1, 600, DEFAULT_MIN_SECONDS),
         maxSeconds: clampInt(raw.maxSeconds, 1, 600, DEFAULT_MAX_SECONDS),
     };
 }

@@ -26,6 +26,8 @@ export function looksLikeBrowser(ua: string) {
 }
 
 /** Drop query strings, reject admin routes, cap length. Returns null when the hit should not be stored. */
+export const SITE_PAGE_PATHS = ["/", "/canvas", "/image", "/video", "/assets"] as const;
+
 export function normalizeVisitorPath(raw: string | undefined | null): string | null {
     if (!raw) return null;
     let path = raw.trim();
@@ -36,6 +38,13 @@ export function normalizeVisitorPath(raw: string | undefined | null): string | n
     if (path.length > 200) path = path.slice(0, 200);
     if (path === "/admin" || path.startsWith("/admin/")) return null;
     return path;
+}
+
+/** Exact site pages for path ranking. `/canvas/:id` and other nested routes return null. */
+export function sitePagePath(raw: string | undefined | null): string | null {
+    const path = normalizeVisitorPath(raw);
+    if (!path) return null;
+    return (SITE_PAGE_PATHS as readonly string[]).includes(path) ? path : null;
 }
 
 export function utcDateString(at = new Date()) {

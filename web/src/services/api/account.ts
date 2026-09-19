@@ -1,6 +1,6 @@
 import { apiDelete, apiGet, apiPatch, apiPost, idempotencyHeaders, newIdempotencyKey, type Paginated } from "./client";
 
-export type UserRole = "user" | "admin";
+export type UserRole = "user" | "admin" | "reseller";
 
 export type WalletSnapshot = {
     balance: string;
@@ -27,6 +27,7 @@ export type SiteInfo = {
     imageGenerationEnabled: boolean;
     videoGenerationEnabled: boolean;
     agentEnabled: boolean;
+    openPlatformEnabled: boolean;
 };
 
 export type LedgerEntry = {

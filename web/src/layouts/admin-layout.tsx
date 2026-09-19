@@ -1,5 +1,5 @@
 import { Button, Layout, Menu } from "antd";
-import { AppWindow, ArrowLeft, BarChart3, BookOpen, ClipboardList, CreditCard, Database, FileClock, Gauge, KeyRound, Landmark, Layers, Package, ScrollText, Settings, Ticket, Users } from "lucide-react";
+import { AppWindow, ArrowLeft, BarChart3, BookOpen, ClipboardList, CreditCard, Database, FileClock, Gauge, Handshake, KeyRound, Landmark, Layers, Megaphone, Package, Percent, ScrollText, Settings, Store, Ticket, Users } from "lucide-react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
@@ -28,6 +28,7 @@ const navGroups: Array<{ titleKey: string; items: AdminNavItem[] }> = [
             { key: "payments", path: "/admin/payments", icon: Landmark, labelKey: "admin.nav.payments" },
             { key: "packages", path: "/admin/packages", icon: Package, labelKey: "admin.nav.packages" },
             { key: "cards", path: "/admin/cards", icon: Ticket, labelKey: "admin.nav.cards" },
+            { key: "card-shop", path: "/admin/card-shop", icon: Store, labelKey: "admin.nav.cardShop" },
         ],
     },
     {
@@ -39,8 +40,16 @@ const navGroups: Array<{ titleKey: string; items: AdminNavItem[] }> = [
         ],
     },
     {
+        titleKey: "admin.nav.groupOpenPlatform",
+        items: [
+            { key: "resellers", path: "/admin/resellers", icon: Handshake, labelKey: "admin.nav.resellers" },
+            { key: "reseller-tiers", path: "/admin/reseller-tiers", icon: Percent, labelKey: "admin.nav.resellerTiers" },
+        ],
+    },
+    {
         titleKey: "admin.nav.groupPlatform",
         items: [
+            { key: "announcements", path: "/admin/announcements", icon: Megaphone, labelKey: "admin.nav.announcements" },
             { key: "storage", path: "/admin/storage", icon: Database, labelKey: "admin.nav.storage" },
             { key: "services", path: "/admin/services", icon: AppWindow, labelKey: "admin.nav.services" },
             { key: "settings", path: "/admin/settings", icon: Settings, labelKey: "admin.nav.settings" },
@@ -84,12 +93,12 @@ export default function AdminLayout() {
             <Sider
                 width={232}
                 theme="light"
-                className="overflow-hidden border-r border-stone-200 dark:border-stone-800 [&>.ant-layout-sider-children]:flex [&>.ant-layout-sider-children]:h-full [&>.ant-layout-sider-children]:min-h-0 [&>.ant-layout-sider-children]:flex-col"
+                className="z-20 border-r-2 border-stone-300 shadow-[8px_0_28px_rgba(28,25,23,0.12)] dark:border-stone-600 dark:shadow-[8px_0_32px_rgba(0,0,0,0.55)] [&>.ant-layout-sider-children]:flex [&>.ant-layout-sider-children]:h-full [&>.ant-layout-sider-children]:min-h-0 [&>.ant-layout-sider-children]:flex-col [&>.ant-layout-sider-children]:overflow-hidden"
             >
-                <div className="flex h-14 shrink-0 items-center px-4">
+                <div className="flex h-14 shrink-0 items-center border-b border-stone-200 px-4 dark:border-stone-700">
                     <span className="truncate text-sm font-semibold">{t("admin.title")}</span>
                 </div>
-                <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto">
+                <div className="hide-scrollbar min-h-0 flex-1 overflow-y-auto">
                     <Menu mode="inline" selectedKeys={[selectedKey]} items={menuItems} className="border-none" style={{ background: "transparent" }} />
                 </div>
             </Sider>

@@ -136,7 +136,13 @@ export default function AdminUsersPage() {
             >
                 <Form form={form} layout="vertical" requiredMark={false}>
                     <Form.Item name="role" label={t("admin.users.role")}>
-                        <Select options={[{ value: "user", label: t("admin.users.roles.user") }, { value: "admin", label: t("admin.users.roles.admin") }]} />
+                        <Select
+                            options={[
+                                { value: "user", label: t("admin.users.roles.user") },
+                                { value: "reseller", label: t("admin.users.roles.reseller") },
+                                { value: "admin", label: t("admin.users.roles.admin") },
+                            ]}
+                        />
                     </Form.Item>
                     <Form.Item name="status" label={t("admin.users.status")} extra={t("admin.users.disableHint")}>
                         <Select options={[{ value: "active", label: t("admin.users.statuses.active") }, { value: "disabled", label: t("admin.users.statuses.disabled") }]} />

@@ -7,14 +7,21 @@ export type SiteServices = {
     imageEnabled: boolean;
     videoEnabled: boolean;
     agentEnabled: boolean;
+    openPlatformEnabled: boolean;
 };
 
 /** Missing flags (older sessions before bootstrap finishes) stay on, matching the product default. */
-export function siteServicesFrom(site: { imageGenerationEnabled?: boolean; videoGenerationEnabled?: boolean; agentEnabled?: boolean }): SiteServices {
+export function siteServicesFrom(site: {
+    imageGenerationEnabled?: boolean;
+    videoGenerationEnabled?: boolean;
+    agentEnabled?: boolean;
+    openPlatformEnabled?: boolean;
+}): SiteServices {
     return {
         imageEnabled: site.imageGenerationEnabled !== false,
         videoEnabled: site.videoGenerationEnabled !== false,
         agentEnabled: site.agentEnabled !== false,
+        openPlatformEnabled: site.openPlatformEnabled !== false,
     };
 }
 
@@ -22,9 +29,10 @@ export function useSiteServices() {
     const imageGenerationEnabled = useAuthStore((state) => state.site.imageGenerationEnabled);
     const videoGenerationEnabled = useAuthStore((state) => state.site.videoGenerationEnabled);
     const agentEnabled = useAuthStore((state) => state.site.agentEnabled);
+    const openPlatformEnabled = useAuthStore((state) => state.site.openPlatformEnabled);
     return useMemo(
-        () => siteServicesFrom({ imageGenerationEnabled, videoGenerationEnabled, agentEnabled }),
-        [agentEnabled, imageGenerationEnabled, videoGenerationEnabled],
+        () => siteServicesFrom({ imageGenerationEnabled, videoGenerationEnabled, agentEnabled, openPlatformEnabled }),
+        [agentEnabled, imageGenerationEnabled, openPlatformEnabled, videoGenerationEnabled],
     );
 }
 

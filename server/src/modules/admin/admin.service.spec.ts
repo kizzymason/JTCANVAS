@@ -37,6 +37,8 @@ beforeAll(async () => {
         db,
         {} as never,
         { invalidate: async () => undefined } as never,
+        { invalidate: async () => undefined } as never,
+        { invalidateUser: async () => undefined } as never,
         wallet,
         { revokeAllForUser: vi.fn(async () => undefined), refreshPayload: vi.fn(async () => undefined) } as never,
         {} as never,
@@ -89,5 +91,19 @@ describe("AdminService.deleteUsers", () => {
         expect(await db.select().from(users).where(eq(users.id, target.id))).toHaveLength(0);
         expect(await db.select().from(wallets).where(eq(wallets.userId, target.id))).toHaveLength(0);
         expect(await db.select().from(walletLedger).where(eq(walletLedger.userId, target.id))).toHaveLength(0);
+    });
+});
+
+describe("AdminService.overview", () => {
+    it("returns live integer counts and wallet recharge totals", async () => {
+        const user = await createUser();
+        await wallet.credit({ userId: user.id, amount: "12.50", type: "recharge", paymentProvider: "card" });
+        const data = await admin.overview();
+        expect(typeof data.users.total).toBe("number");
+        expect(data.users.total).toBeGreaterThanOrEqual(1);
+        expect(data.users.active).toBeGreaterThanOrEqual(1);
+        expect(Number(data.wallet.recharged)).toBeGreaterThanOrEqual(12.5);
+        expect(data.series.length).toBe(14);
+        expect(data.series.at(-1)?.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     });
 });

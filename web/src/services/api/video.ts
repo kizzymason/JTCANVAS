@@ -1,5 +1,6 @@
 import i18n from "@/i18n";
 import { fileUrl } from "@/services/api/files";
+import { billedVideoResolution } from "@/lib/video-pricing-spec";
 import { modelOptionName, type AiConfig } from "@/stores/use-config-store";
 import { useAuthStore } from "@/stores/use-auth-store";
 import { ensureReferenceKeys, type ReferenceUploadSource } from "./reference-upload";
@@ -39,7 +40,7 @@ export async function createVideoGenerationTask(config: AiConfig, prompt: string
             count: 1,
             seconds: Number(config.videoSeconds) || undefined,
             size: config.size,
-            resolution: config.vquality,
+            resolution: billedVideoResolution(config.vquality, modelOptionName(model)),
             generateAudio: config.videoGenerateAudio === "true",
             watermark: config.videoWatermark === "true",
             source: options?.source ?? "",

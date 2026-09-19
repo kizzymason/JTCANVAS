@@ -9,8 +9,12 @@ export function normalizeVideoPricingResolution(resolution: string | undefined) 
     return raw;
 }
 
-export function videoPricingSpecFor(resolution: string | undefined, hasVideoReference: boolean) {
-    const value = normalizeVideoPricingResolution(resolution);
+export function billedVideoResolution(resolution: string | undefined, _modelName?: string) {
+    return normalizeVideoPricingResolution(resolution);
+}
+
+export function videoPricingSpecFor(resolution: string | undefined, hasVideoReference: boolean, modelName?: string) {
+    const value = billedVideoResolution(resolution, modelName);
     return hasVideoReference ? `${value}${VIDEO_INPUT_SPEC_SUFFIX}` : value;
 }
 

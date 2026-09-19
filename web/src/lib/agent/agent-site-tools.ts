@@ -206,7 +206,7 @@ function getVideoConfig() {
             model,
             modelName: modelOptionName(model),
             size: config.size || "16:9",
-            seconds: config.videoSeconds || "6",
+            seconds: config.videoSeconds || "5",
             resolution: config.vquality || "720",
             generateAudio: config.videoGenerateAudio !== "false",
             watermark: config.videoWatermark === "true",
@@ -232,8 +232,11 @@ function runVideoWorkbench(input: SiteToolInput, navigate: NavigateFunction) {
         applied.size = input.size;
     }
     if (typeof input.seconds === "string" && input.seconds.trim()) {
-        configStore.updateConfig("videoSeconds", input.seconds);
-        applied.seconds = input.seconds;
+        const videoModel = (typeof applied.model === "string" && applied.model) || configStore.config.videoModel || configStore.config.model;
+        const features = modelFeaturesOf(useModelStore.getState().models.find((item) => item.value === videoModel));
+        const seconds = String(Math.max(features.minSeconds, Math.min(features.maxSeconds, Math.floor(Number(input.seconds) || features.minSeconds))));
+        configStore.updateConfig("videoSeconds", seconds);
+        applied.seconds = seconds;
     }
     if (typeof input.resolution === "string" && input.resolution.trim()) {
         configStore.updateConfig("vquality", input.resolution);

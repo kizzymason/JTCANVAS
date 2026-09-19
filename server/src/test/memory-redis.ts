@@ -1,6 +1,6 @@
 /**
- * In-memory stand-in for the ioredis commands used by visitor UV sets,
- * registration hourly caps and redeem cooldowns. Specs only; not wired into the app.
+ * In-memory stand-in for the ioredis commands used by visitor UV sets, registration hourly caps,
+ * redeem cooldowns and open-platform rate limiting. Specs only; not wired into the app.
  */
 export class MemoryRedis {
     private readonly kv = new Map<string, { value: string; members?: Set<string>; expires?: number }>();
@@ -55,6 +55,41 @@ export class MemoryRedis {
         const next = String(Number(row?.value ?? "0") + 1);
         this.kv.set(key, { value: next, expires: row?.expires, members: row?.members });
         return Number(next);
+    }
+
+    async decr(key: string) {
+        const row = this.alive(key);
+        const next = String(Number(row?.value ?? "0") - 1);
+        this.kv.set(key, { value: next, expires: row?.expires, members: row?.members });
+        return Number(next);
+    }
+
+    /**
+     * Minimal pipeline: commands are queued and run in order on `exec`, which returns ioredis's
+     * `[error, result]` tuples so callers can index results the same way they do in production.
+     */
+    multi() {
+        const queued: Array<() => Promise<unknown>> = [];
+        const chain = {
+            incr: (key: string) => {
+                queued.push(() => this.incr(key));
+                return chain;
+            },
+            decr: (key: string) => {
+                queued.push(() => this.decr(key));
+                return chain;
+            },
+            expire: (key: string, seconds: number) => {
+                queued.push(() => this.expire(key, seconds));
+                return chain;
+            },
+            exec: async () => {
+                const results: Array<[null, unknown]> = [];
+                for (const run of queued) results.push([null, await run()]);
+                return results;
+            },
+        };
+        return chain;
     }
 
     async expire(key: string, seconds: number) {

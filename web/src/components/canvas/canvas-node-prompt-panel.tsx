@@ -8,7 +8,7 @@ import { PriceEstimate } from "@/components/price-estimate";
 import { pricingSpecFor } from "@/lib/pricing-spec";
 import { videoPricingSpecFor } from "@/lib/video-pricing-spec";
 import { connectedHasVideoReference } from "@/lib/canvas/canvas-resource-references";
-import { defaultConfig, resolveModelForCapability, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
+import { defaultConfig, modelOptionName, resolveModelForCapability, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { CanvasImageSettingsPopover } from "./canvas-image-settings-popover";
@@ -132,8 +132,8 @@ export function CanvasNodePromptPanel({ node, nodes, isRunning, onPromptChange, 
                     className="shrink-0"
                     model={config.model}
                     count={mode === "image" ? Number(config.count) || 1 : 1}
-                    seconds={mode === "video" ? Math.max(1, Number(config.videoSeconds) || 1) : undefined}
-                    spec={mode === "image" ? pricingSpecFor(config.quality, config.size) : mode === "video" ? videoPricingSpecFor(config.vquality, connectedHasVideoReference(connectedNodes, nodes)) : undefined}
+                    seconds={mode === "video" ? Math.max(4, Number(config.videoSeconds) || 4) : undefined}
+                    spec={mode === "image" ? pricingSpecFor(config.quality, config.size) : mode === "video" ? videoPricingSpecFor(config.vquality, connectedHasVideoReference(connectedNodes, nodes), modelOptionName(config.model)) : undefined}
                     referenceCount={connectedNodes.length}
                 />
                 <Button

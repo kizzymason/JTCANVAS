@@ -9,6 +9,7 @@ describe("model features", () => {
         expect(features.supportsTransparent).toBe(false);
         expect(features.aspectRatios).toContain("auto");
         expect(features.aspectRatios).toHaveLength(16);
+        expect(features.minSeconds).toBe(4);
         expect(features.aspectPresets.find((item) => item.ratio === "16:9")?.sizes["1K"]).toBe("1424x800");
     });
 
@@ -45,6 +46,9 @@ describe("model features", () => {
         expect(() => assertVideoGenerationFeatures(features, { seconds: 12, resolution: "720" })).toThrow(/最长 8 秒/);
         expect(() => assertVideoGenerationFeatures(features, { seconds: 6, resolution: "480p" })).toThrow(/清晰度/);
         expect(() => assertVideoGenerationFeatures(features, { seconds: 6, resolution: "720" })).not.toThrow();
+        expect(() => assertVideoGenerationFeatures(features, { seconds: 4, resolution: "720" })).not.toThrow();
+        expect(() => assertVideoGenerationFeatures(features, { seconds: 1, resolution: "720" })).toThrow(/该模型最低生成时长4S/);
+        expect(() => assertVideoGenerationFeatures(features, { seconds: 2, resolution: "720" })).toThrow(/该模型最低生成时长4S/);
     });
 
     it("keeps aspect presets isolated to the parsed model payload", () => {

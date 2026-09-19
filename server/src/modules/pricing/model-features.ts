@@ -6,7 +6,8 @@ export type ImageResolution = (typeof IMAGE_RESOLUTIONS)[number];
 
 export const IMAGE_ASPECT_RATIOS = defaultAspectPresets().map((item) => item.ratio);
 export const DEFAULT_MAX_COUNT = 15;
-export const DEFAULT_VIDEO_RESOLUTIONS = ["480", "720"];
+export const DEFAULT_VIDEO_RESOLUTIONS = ["720", "480"];
+export const DEFAULT_MIN_SECONDS = 4;
 export const DEFAULT_MAX_SECONDS = 20;
 
 export type ModelFeatures = {
@@ -16,6 +17,7 @@ export type ModelFeatures = {
     aspectRatios: string[];
     aspectPresets: AspectPreset[];
     videoResolutions: string[];
+    minSeconds: number;
     maxSeconds: number;
 };
 
@@ -26,6 +28,7 @@ export type ModelFeaturesInput = Partial<{
     aspectRatios: string[];
     aspectPresets: AspectPreset[];
     videoResolutions: string[];
+    minSeconds: number;
     maxSeconds: number;
 }>;
 
@@ -41,6 +44,7 @@ export function parseModelFeatures(raw: unknown): ModelFeatures {
         aspectPresets,
         aspectRatios: aspectPresets.map((item) => item.ratio),
         videoResolutions: normalizeVideoResolutions(value.videoResolutions),
+        minSeconds: clampInt(value.minSeconds, 1, 600, DEFAULT_MIN_SECONDS),
         maxSeconds: clampInt(value.maxSeconds, 1, 600, DEFAULT_MAX_SECONDS),
     };
 }
@@ -80,6 +84,8 @@ export function assertImageGenerationFeatures(
 
 export function assertVideoGenerationFeatures(features: ModelFeatures, input: { seconds?: number; resolution?: string; size?: string }) {
     const seconds = Math.floor(input.seconds ?? 0);
+    const minSeconds = Math.min(features.minSeconds, features.maxSeconds);
+    if (seconds >= 1 && seconds < minSeconds) throw badRequest("SECONDS_LIMIT", `该模型最低生成时长${minSeconds}S`);
     if (seconds > features.maxSeconds) throw badRequest("SECONDS_LIMIT", `该模型最长 ${features.maxSeconds} 秒`);
     const resolution = (input.resolution ?? "").trim().replace(/p$/i, "");
     if (resolution && features.videoResolutions.length && !features.videoResolutions.includes(resolution)) {

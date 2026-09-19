@@ -47,7 +47,7 @@ export function AppConfigPanel({ showDoneButton = false, initialTab = "preferenc
             <Form layout="vertical" requiredMark={false}>
                 <div className="mb-2 text-sm font-semibold">{t("config.preferences.interface")}</div>
                 <Form.Item label={t("config.preferences.language")} extra={t("config.preferences.languageDescription")} className="mb-6 max-w-xs">
-                    <Select
+                    <Select<AppLocale>
                         value={locale === "en-US" ? "en-US" : "zh-CN"}
                         options={[
                             { value: "zh-CN", label: t("locale.zhCN") },

@@ -456,7 +456,6 @@
             transform: translate(0, 0) rotate(0) scale(1);
         }
     }
-
 }
 
 ::view-transition-old(root),
@@ -612,34 +611,153 @@
     font-size: 0.75rem;
 }
 
-.infinite-canvas-light .ant-alert-info {
+/*
+ * Info alerts are the product's "notice card": inverted from the surrounding theme so they read as a
+ * statement rather than decoration. The doubled class keeps this ahead of antd's own injected
+ * variant styles, which land in <head> after this sheet at otherwise equal specificity.
+ */
+.infinite-canvas-light .ant-alert.ant-alert-info {
     background: #171717;
     border-color: #171717;
     color: #ffffff;
 }
 
-.infinite-canvas-light .ant-alert-info .ant-alert-message,
-.infinite-canvas-light .ant-alert-info .ant-alert-description,
-.infinite-canvas-light .ant-alert-info .ant-alert-icon {
+/* antd 6 renamed the heading element from `-message` to `-title`; both are listed so a future
+   rename back, or a stray v5 component, still inherits the inverted color. */
+.infinite-canvas-light .ant-alert.ant-alert-info .ant-alert-title,
+.infinite-canvas-light .ant-alert.ant-alert-info .ant-alert-message,
+.infinite-canvas-light .ant-alert.ant-alert-info .ant-alert-description,
+.infinite-canvas-light .ant-alert.ant-alert-info .ant-alert-icon {
     color: #ffffff;
 }
 
-.infinite-canvas-light .ant-alert-info .ant-alert-close-icon {
+.infinite-canvas-light .ant-alert.ant-alert-info .ant-alert-close-icon {
     color: rgba(255, 255, 255, 0.72);
 }
 
-.infinite-canvas-dark .ant-alert-info {
+.infinite-canvas-dark .ant-alert.ant-alert-info {
     background: #fafafa;
     border-color: #fafafa;
     color: #171717;
 }
 
-.infinite-canvas-dark .ant-alert-info .ant-alert-message,
-.infinite-canvas-dark .ant-alert-info .ant-alert-description,
-.infinite-canvas-dark .ant-alert-info .ant-alert-icon {
+.infinite-canvas-dark .ant-alert.ant-alert-info .ant-alert-title,
+.infinite-canvas-dark .ant-alert.ant-alert-info .ant-alert-message,
+.infinite-canvas-dark .ant-alert.ant-alert-info .ant-alert-description,
+.infinite-canvas-dark .ant-alert.ant-alert-info .ant-alert-icon {
     color: #171717;
 }
 
-.infinite-canvas-dark .ant-alert-info .ant-alert-close-icon {
+.infinite-canvas-dark .ant-alert.ant-alert-info .ant-alert-close-icon {
     color: rgba(23, 23, 23, 0.65);
+}
+
+/* The heading has to carry the weight on an inverted card, otherwise it reads as body copy. */
+.ant-alert.ant-alert-info .ant-alert-title,
+.ant-alert.ant-alert-info .ant-alert-message {
+    font-weight: 600;
+}
+
+/*
+ * Set while the devtools heuristic in lib/anti-inspect.ts thinks a panel is open. Only areas opted
+ * in with `data-sensitive` are obscured, and card codes stay readable because the buyer needs them.
+ */
+.anti-inspect-blur [data-sensitive]:not([data-allow-copy]) {
+    filter: blur(6px);
+    transition: filter 120ms ease-out;
+}
+
+/*
+ * Content passed as a description brings its own colors (antd Typography, muted utility classes).
+ * On an inverted card those turn unreadable, so anything nested inherits the card's color instead.
+ */
+.ant-alert.ant-alert-info .ant-alert-description .ant-typography,
+.ant-alert.ant-alert-info .ant-alert-description a,
+.ant-alert.ant-alert-info .ant-alert-description code {
+    color: inherit;
+}
+
+.ant-alert.ant-alert-info .ant-alert-description .ant-typography-copy {
+    color: inherit;
+    opacity: 0.75;
+}
+
+.ant-alert.ant-alert-info .ant-alert-description .ant-typography-copy:hover {
+    opacity: 1;
+}
+
+.announcement-editor .tiptap,
+.announcement-html {
+    font-size: 0.9375rem;
+    line-height: 1.7;
+    color: inherit;
+    word-break: break-word;
+}
+
+.announcement-editor .tiptap {
+    min-height: 280px;
+    padding: 0.85rem 1rem 1.25rem;
+    outline: none;
+}
+
+.announcement-editor .tiptap p.is-editor-empty:first-child::before {
+    color: #a8a29e;
+    content: attr(data-placeholder);
+    float: left;
+    height: 0;
+    pointer-events: none;
+}
+
+.announcement-editor .tiptap img,
+.announcement-html img {
+    display: inline-block;
+    max-width: 100%;
+    height: auto;
+    border-radius: 0.5rem;
+}
+
+.announcement-html p,
+.announcement-editor .tiptap p {
+    margin: 0 0 0.75em;
+}
+
+.announcement-html h2,
+.announcement-editor .tiptap h2 {
+    margin: 1.1em 0 0.5em;
+    font-size: 1.25rem;
+    font-weight: 600;
+}
+
+.announcement-html h3,
+.announcement-editor .tiptap h3 {
+    margin: 1em 0 0.4em;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.announcement-html ul,
+.announcement-html ol,
+.announcement-editor .tiptap ul,
+.announcement-editor .tiptap ol {
+    margin: 0 0 0.75em;
+    padding-left: 1.4em;
+}
+
+.announcement-html a,
+.announcement-editor .tiptap a {
+    color: #2563eb;
+    text-decoration: underline;
+}
+
+.dark .announcement-html a,
+.dark .announcement-editor .tiptap a {
+    color: #93c5fd;
+}
+
+.announcement-html blockquote,
+.announcement-editor .tiptap blockquote {
+    margin: 0 0 0.75em;
+    border-left: 3px solid #d6d3d1;
+    padding-left: 0.85em;
+    color: #57534e;
 }

@@ -1,12 +1,14 @@
-import { App, Button, Card, Input, Select, Space, Statistic, Table, Tag } from "antd";
+import { Alert, App, Button, Input, Select, Space, Spin, Table, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import type { TFunction } from "i18next";
 import { Download, Search } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ApiError } from "@/services/api/client";
 import { adminApi, type VisitorEvent, type VisitorKind, type VisitorSummary } from "@/services/api/admin";
 import { downloadCsv, fetchAllPages } from "../export-csv";
+import { OpsBars, OpsDonut, OpsKpi, OpsLineChart } from "../ops-charts";
 import { useAdminTable } from "../use-admin-table";
 
 const KINDS: VisitorKind[] = ["human", "bot", "suspected"];
@@ -15,21 +17,28 @@ export default function AdminVisitorsPage() {
     const { t } = useTranslation();
     const { message } = App.useApp();
     const [summary, setSummary] = useState<VisitorSummary | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState("");
     const [kind, setKind] = useState<VisitorKind | undefined>();
     const [keyword, setKeyword] = useState("");
     const [query, setQuery] = useState("");
     const [exporting, setExporting] = useState(false);
 
     useEffect(() => {
-        void adminApi.visitorsSummary().then(setSummary).catch(() => undefined);
-    }, []);
+        void adminApi
+            .visitorsSummary()
+            .then((result) => {
+                setSummary(result);
+                setLoadError("");
+            })
+            .catch((error) => setLoadError(error instanceof ApiError ? error.message : t("admin.visitors.loadFailed")))
+            .finally(() => setLoading(false));
+    }, [t]);
 
     const table = useAdminTable<VisitorEvent>(
         useCallback((params) => adminApi.visitorEvents({ ...params, kind, keyword: query || undefined }), [kind, query]),
         [kind, query],
     );
-
-    const maxPv = Math.max(1, ...(summary?.days.map((day) => day.pv) ?? [1]));
 
     const exportRows = async () => {
         setExporting(true);
@@ -55,71 +64,77 @@ export default function AdminVisitorsPage() {
             width: 90,
             render: (value: VisitorKind) => <Tag color={kindColor(value)}>{t(`admin.visitors.kinds.${value}`)}</Tag>,
         },
-        { title: t("admin.visitors.path"), dataIndex: "path", ellipsis: true },
+        {
+            title: t("admin.visitors.path"),
+            dataIndex: "path",
+            ellipsis: true,
+            render: (value: string) => pageLabel(t, value),
+        },
         { title: t("admin.visitors.ip"), dataIndex: "ip", width: 140 },
         { title: t("admin.visitors.device"), dataIndex: "device", width: 180, ellipsis: true },
     ];
 
+    const dates = summary?.days.map((day) => day.date) ?? [];
+    const pathBars = useMemo(
+        () =>
+            (summary?.paths ?? []).map((item) => ({
+                label: pageLabel(t, item.path),
+                value: item.pv,
+                hint: `UV ${item.uv}`,
+            })),
+        [summary?.paths, t],
+    );
+    const kindSlices = [
+        { label: t("admin.visitors.human"), value: summary?.today.human ?? 0 },
+        { label: t("admin.visitors.bot"), value: summary?.today.bot ?? 0 },
+        { label: t("admin.visitors.suspected"), value: summary?.today.suspected ?? 0 },
+    ];
+
     return (
-        <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-4 bg-[linear-gradient(to_right,rgba(120,113,108,0.08)_1px,transparent_1px),linear-gradient(to_bottom,rgba(120,113,108,0.08)_1px,transparent_1px)] bg-[size:28px_28px]">
             <div>
-                <h1 className="text-xl font-semibold text-stone-950 dark:text-stone-100">{t("admin.visitors.title")}</h1>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-stone-500">{t("admin.visitors.opsLabel")}</p>
+                <h1 className="mt-1 text-xl font-semibold text-stone-950 dark:text-stone-100">{t("admin.visitors.title")}</h1>
                 <p className="mt-1 text-sm text-stone-500">{t("admin.visitors.description")}</p>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                <Card size="small">
-                    <Statistic title={t("admin.visitors.todayPv")} value={summary?.today.pv ?? 0} />
-                </Card>
-                <Card size="small">
-                    <Statistic title={t("admin.visitors.todayUv")} value={summary?.today.uv ?? 0} />
-                </Card>
-                <Card size="small">
-                    <Statistic title={t("admin.visitors.human")} value={summary?.today.human ?? 0} />
-                </Card>
-                <Card size="small">
-                    <Statistic title={t("admin.visitors.bot")} value={summary?.today.bot ?? 0} />
-                </Card>
-                <Card size="small">
-                    <Statistic title={t("admin.visitors.suspected")} value={summary?.today.suspected ?? 0} />
-                </Card>
-            </div>
+            {loadError ? <Alert type="error" showIcon message={loadError} /> : null}
 
-            <div className="grid gap-3 lg:grid-cols-2">
-                <Card size="small" title={t("admin.visitors.last14Days")}>
-                    <div className="flex h-28 items-end gap-1">
-                        {(summary?.days ?? []).map((day) => (
-                            <div key={day.date} className="flex min-w-0 flex-1 flex-col items-center justify-end gap-1">
-                                <div
-                                    className="w-full rounded-sm bg-stone-800 dark:bg-stone-200"
-                                    style={{ height: `${Math.max(4, (day.pv / maxPv) * 100)}%` }}
-                                    title={`${day.date} PV ${day.pv} / UV ${day.uv}`}
-                                />
-                            </div>
-                        ))}
+            {loading ? (
+                <div className="flex h-full min-h-[240px] items-center justify-center bg-background">
+                    <Spin />
+                </div>
+            ) : (
+                <>
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                        <OpsKpi label={t("admin.visitors.todayPv")} value={String(summary?.today.pv ?? 0)} hint={t("admin.visitors.todayUvHint", { count: summary?.today.uv ?? 0 })} />
+                        <OpsKpi label={t("admin.visitors.human")} value={String(summary?.today.human ?? 0)} />
+                        <OpsKpi label={t("admin.visitors.bot")} value={String(summary?.today.bot ?? 0)} />
+                        <OpsKpi label={t("admin.visitors.suspected")} value={String(summary?.today.suspected ?? 0)} />
                     </div>
-                    <div className="mt-2 flex justify-between text-xs text-stone-500">
-                        <span>{summary?.days[0]?.date ?? ""}</span>
-                        <span>{summary?.days.at(-1)?.date ?? ""}</span>
+
+                    <div className="grid gap-3 xl:grid-cols-3">
+                        <div className="xl:col-span-2">
+                            <OpsLineChart
+                                title={t("admin.visitors.trafficTrend")}
+                                caption={t("admin.visitors.last14Days")}
+                                dates={dates}
+                                series={[
+                                    { id: "pv", label: t("admin.visitors.pv"), values: summary?.days.map((day) => day.pv) ?? [], tone: "primary" },
+                                    { id: "uv", label: t("admin.visitors.uv"), values: summary?.days.map((day) => day.uv) ?? [], tone: "muted" },
+                                    { id: "human", label: t("admin.visitors.human"), values: summary?.days.map((day) => day.human) ?? [], tone: "faint" },
+                                ]}
+                            />
+                        </div>
+                        <OpsDonut title={t("admin.visitors.kindMix")} slices={kindSlices} />
                     </div>
-                </Card>
-                <Card size="small" title={t("admin.visitors.pathRank")}>
-                    <Table
-                        rowKey="path"
-                        size="small"
-                        pagination={false}
-                        dataSource={summary?.paths ?? []}
-                        columns={[
-                            { title: t("admin.visitors.path"), dataIndex: "path", ellipsis: true },
-                            { title: t("admin.visitors.pv"), dataIndex: "pv", width: 80, align: "right" },
-                            { title: t("admin.visitors.uv"), dataIndex: "uv", width: 80, align: "right" },
-                        ]}
-                    />
-                </Card>
-            </div>
+
+                    <OpsBars title={t("admin.visitors.pathRank")} caption={t("admin.visitors.pathHint")} items={pathBars.length > 0 ? pathBars : [{ label: t("admin.visitors.emptyPages"), value: 0 }]} />
+                </>
+            )}
 
             <div className="flex flex-wrap items-end justify-between gap-3">
-                <h2 className="text-base font-medium text-stone-950 dark:text-stone-100">{t("admin.visitors.events")}</h2>
+                <h2 className="text-[11px] font-semibold uppercase tracking-[0.22em] text-stone-500">{t("admin.visitors.events")}</h2>
                 <Space wrap>
                     <Select
                         allowClear
@@ -160,6 +175,11 @@ export default function AdminVisitorsPage() {
             <Table rowKey="id" size="small" loading={table.loading} dataSource={table.items} columns={eventColumns} pagination={table.pagination} />
         </div>
     );
+}
+
+function pageLabel(t: TFunction, path: string) {
+    const key = path === "/" ? "home" : path.replace(/^\//, "");
+    return t(`admin.visitors.pages.${key}`, { defaultValue: path });
 }
 
 function kindColor(kind: VisitorKind) {

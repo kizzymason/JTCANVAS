@@ -31,7 +31,7 @@ afterAll(async () => {
 describe("VisitorsService.ingest", () => {
     it("increments daily totals before inserting detail, and UV only on first sighting", async () => {
         const visitorId = `testvid_${randomUUID().slice(0, 12)}`;
-        const path = `/canvas/test-${randomUUID().slice(0, 8)}`;
+        const path = "/image";
 
         await visitors.ingest({ visitorId, ip: "10.0.0.9", userAgent: CHROME, device: "Windows · 1920x1080", path });
         await visitors.ingest({ visitorId, ip: "10.0.0.9", userAgent: CHROME, device: "Windows · 1920x1080", path });
@@ -54,9 +54,31 @@ describe("VisitorsService.ingest", () => {
         expect(sitewide.uv).toBeGreaterThanOrEqual(1);
     });
 
+    it("counts canvas project hits sitewide without ranking the private path", async () => {
+        const visitorId = `cv_${randomUUID().slice(0, 12)}`;
+        const path = `/canvas/${randomUUID()}`;
+
+        await visitors.ingest({ visitorId, ip: "10.0.0.7", userAgent: CHROME, device: "Windows", path });
+
+        const today = utcDateString();
+        const [pathRow] = await db
+            .select()
+            .from(visitorDailyStats)
+            .where(and(eq(visitorDailyStats.statDate, today), eq(visitorDailyStats.path, path)));
+        const details = await db.select().from(visitorEvents).where(eq(visitorEvents.visitorId, visitorId));
+        const [sitewide] = await db
+            .select()
+            .from(visitorDailyStats)
+            .where(and(eq(visitorDailyStats.statDate, today), eq(visitorDailyStats.path, "*"), eq(visitorDailyStats.kind, "human")));
+
+        expect(pathRow).toBeUndefined();
+        expect(details.length).toBe(0);
+        expect(sitewide.pv).toBeGreaterThanOrEqual(1);
+    });
+
     it("keeps daily pv/uv after pruning events older than 30 days", async () => {
         const visitorId = `oldvid_${randomUUID().slice(0, 12)}`;
-        const path = `/image/test-${randomUUID().slice(0, 8)}`;
+        const path = "/video";
         await visitors.ingest({ visitorId, ip: "10.0.0.8", userAgent: CHROME, device: "Windows", path });
 
         const today = utcDateString();

@@ -1,5 +1,5 @@
 import { App, Button, Card, Form, Switch } from "antd";
-import { Bot, Image as ImageIcon, Video } from "lucide-react";
+import { Bot, Image as ImageIcon, Plug, Video } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -22,6 +22,7 @@ export default function AdminServicesPage() {
                     imageGenerationEnabled: site.imageGenerationEnabled,
                     videoGenerationEnabled: site.videoGenerationEnabled,
                     agentEnabled: site.agentEnabled,
+                    openPlatformEnabled: site.openPlatformEnabled,
                 }),
             )
             .catch(() => undefined);
@@ -48,7 +49,13 @@ export default function AdminServicesPage() {
             </div>
 
             <Card size="small" className="max-w-2xl">
-                <Form form={form} layout="vertical" requiredMark={false} initialValues={{ imageGenerationEnabled: true, videoGenerationEnabled: true, agentEnabled: true }} onFinish={(values) => void submit(values)}>
+                <Form
+                    form={form}
+                    layout="vertical"
+                    requiredMark={false}
+                    initialValues={{ imageGenerationEnabled: true, videoGenerationEnabled: true, agentEnabled: true, openPlatformEnabled: true }}
+                    onFinish={(values) => void submit(values)}
+                >
                     <Form.Item name="imageGenerationEnabled" label={<span className="inline-flex items-center gap-2"><ImageIcon className="size-4" />{t("admin.services.image")}</span>} extra={t("admin.services.imageHint")} valuePropName="checked">
                         <Switch />
                     </Form.Item>
@@ -56,6 +63,14 @@ export default function AdminServicesPage() {
                         <Switch />
                     </Form.Item>
                     <Form.Item name="agentEnabled" label={<span className="inline-flex items-center gap-2"><Bot className="size-4" />{t("admin.services.agent")}</span>} extra={t("admin.services.agentHint")} valuePropName="checked">
+                        <Switch />
+                    </Form.Item>
+                    <Form.Item
+                        name="openPlatformEnabled"
+                        label={<span className="inline-flex items-center gap-2"><Plug className="size-4" />{t("admin.services.openPlatform")}</span>}
+                        extra={t("admin.services.openPlatformHint")}
+                        valuePropName="checked"
+                    >
                         <Switch />
                     </Form.Item>
                     <Button type="primary" htmlType="submit" loading={saving}>

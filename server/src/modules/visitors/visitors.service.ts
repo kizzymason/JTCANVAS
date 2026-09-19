@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
-import { and, desc, eq, gte, ilike, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, ilike, inArray, lt, or, sql } from "drizzle-orm";
 import Redis from "ioredis";
 import { DB, type Database } from "../../db/db.module";
 import { visitorDailyStats, visitorEvents, type VisitorKind } from "../../db/schema";
@@ -16,7 +16,9 @@ import {
     classifyVisitor,
     eachUtcDate,
     isBotUserAgent,
+    sitePagePath,
     utcDateString,
+    SITE_PAGE_PATHS,
 } from "./visitors-classify";
 
 export { VISITOR_DETAIL_RETENTION_DAYS } from "./visitors-classify";
@@ -44,17 +46,20 @@ export class VisitorsService {
      * Daily totals first, then the detail row. Charts keep working after the 30-day prune.
      */
     async ingest(input: IngestInput) {
-        const burst = input.forceKind ? false : await this.markBurst(input.ip, input.path);
+        const trackedPath = sitePagePath(input.path);
+        const burst = input.forceKind ? false : await this.markBurst(input.ip, trackedPath ?? "_other");
         const kind = input.forceKind ?? classifyVisitor({ ua: input.userAgent, webdriver: input.webdriver, burst });
         const date = utcDateString();
-        await Promise.all([this.bumpDaily(date, input.path, kind, input.visitorId), this.bumpDaily(date, SITEWIDE_PATH, kind, input.visitorId)]);
+        await this.bumpDaily(date, SITEWIDE_PATH, kind, input.visitorId);
+        if (!trackedPath) return { ok: true as const, kind };
+        await this.bumpDaily(date, trackedPath, kind, input.visitorId);
         await this.db.insert(visitorEvents).values({
             visitorId: input.visitorId.slice(0, 64),
             userId: input.userId || null,
             ip: input.ip.slice(0, 64),
             userAgent: input.userAgent.slice(0, 512),
             device: input.device.slice(0, 256),
-            path: input.path.slice(0, 200),
+            path: trackedPath,
             kind,
         });
         return { ok: true as const, kind };
@@ -122,10 +127,9 @@ export class VisitorsService {
                 uv: sql<number>`coalesce(sum(${visitorDailyStats.uv}), 0)::int`,
             })
             .from(visitorDailyStats)
-            .where(and(gte(visitorDailyStats.statDate, from), sql`${visitorDailyStats.path} <> ${SITEWIDE_PATH}`))
+            .where(and(gte(visitorDailyStats.statDate, from), inArray(visitorDailyStats.path, [...SITE_PAGE_PATHS])))
             .groupBy(visitorDailyStats.path)
-            .orderBy(sql`sum(${visitorDailyStats.pv}) desc`)
-            .limit(20);
+            .orderBy(sql`sum(${visitorDailyStats.pv}) desc`);
 
         return {
             today: todayBucket,
@@ -138,7 +142,7 @@ export class VisitorsService {
         const keyword = query.keyword?.trim();
         const filters = [
             query.kind ? eq(visitorEvents.kind, query.kind) : undefined,
-            query.path ? eq(visitorEvents.path, query.path) : undefined,
+            query.path ? eq(visitorEvents.path, query.path) : inArray(visitorEvents.path, [...SITE_PAGE_PATHS]),
             keyword ? or(ilike(visitorEvents.ip, `%${keyword}%`), ilike(visitorEvents.userAgent, `%${keyword}%`), ilike(visitorEvents.path, `%${keyword}%`)) : undefined,
         ].filter(Boolean);
         const where = filters.length ? and(...filters) : undefined;

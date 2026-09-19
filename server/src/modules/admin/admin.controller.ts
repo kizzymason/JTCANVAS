@@ -60,8 +60,8 @@ export class AdminController {
     @Patch("users/:id")
     @Audit({ action: "user.update", targetType: "user" })
     @ApiOperation({ summary: "修改用户角色、状态、昵称或重置密码" })
-    updateUser(@Param("id") id: string, @Body() body: UpdateUserDto) {
-        return this.admin.updateUser(id, body);
+    updateUser(@CurrentUser() operator: AuthUser, @Param("id") id: string, @Body() body: UpdateUserDto) {
+        return this.admin.updateUser(id, body, operator.id);
     }
 
     @Post("users/delete")
@@ -301,17 +301,19 @@ export class AdminController {
 
     @Patch("settings/services")
     @Audit({ action: "settings.services", targetType: "settings" })
-    @ApiOperation({ summary: "开关图片生成、视频生成与 Agent 前台入口" })
+    @ApiOperation({ summary: "开关图片生成、视频生成、Agent 与开放平台前台入口" })
     async saveServices(@CurrentUser() user: AuthUser, @Body() body: ServiceSettingsDto) {
         const before = await this.settings.getSite();
         const saved = await this.settings.saveSite(body, user.id);
+        const fields = (site: typeof saved) => ({
+            imageGenerationEnabled: site.imageGenerationEnabled,
+            videoGenerationEnabled: site.videoGenerationEnabled,
+            agentEnabled: site.agentEnabled,
+            openPlatformEnabled: site.openPlatformEnabled,
+        });
         return {
             site: saved,
-            audit: {
-                targetId: "services",
-                before: { imageGenerationEnabled: before.imageGenerationEnabled, videoGenerationEnabled: before.videoGenerationEnabled, agentEnabled: before.agentEnabled },
-                after: { imageGenerationEnabled: saved.imageGenerationEnabled, videoGenerationEnabled: saved.videoGenerationEnabled, agentEnabled: saved.agentEnabled },
-            },
+            audit: { targetId: "services", before: fields(before), after: fields(saved) },
         };
     }
 

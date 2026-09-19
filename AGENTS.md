@@ -53,11 +53,12 @@
 - 后端代码放在 `server/`，独立 npm 包，技术栈为 NestJS + Fastify 适配器 + Drizzle ORM + PostgreSQL + Redis + BullMQ。
 - 按领域划分 Nest 模块，一个模块一个目录：`auth`、`users`、`wallet`、`billing`、`channels`、`pricing`、`generation`、`storage`、`projects`、`assets`、`admin`、`audit`。模块内按 `*.controller.ts` / `*.service.ts` / `dto/` / `*.module.ts` 组织。
 - 数据库 schema 放 `server/src/db/schema/`，迁移由 `drizzle-kit` 生成，不手写 SQL 迁移文件；不允许运行期自动建表或自动 `ALTER`。
+- 往 Drizzle `sql\`...\`` 里插时间必须用 ISO 字符串再 `::timestamptz`（例如 `2026-08-26T18:51:26.000Z`），不要直接插 `Date` 对象：postgres.js 会变成 `Wed Aug 26 2026 ...`，PostgreSQL 解析失败并 500。
 - 同接口多实现的能力（对象存储驱动、AI provider 适配器）用抽象类 + DI token 注入，不要在业务代码里写 `if (driver === "s3")` 分支。
 - 所有入参用 `class-validator` DTO 校验并开启 `whitelist` 与 `forbidNonWhitelisted`；金额、数量、秒数等字段必须校验范围。
 - 横切关注点用 Nest 原生机制：鉴权与角色用 Guard，审计日志与幂等用 Interceptor，限流用 `@nestjs/throttler`，不要在每个 controller 里重复实现。
 - 第三方 AI 调用只允许在 worker 进程发生；API 进程只负责鉴权、计费和入队，不直接请求上游。
-- 服务启动时的渠道/模型预置只允许在目标渠道族尚无任何模型时写入；一旦管理员已添加、改名、改价或删除模型，重启和「预置」按钮都不得再插入预设模型，也不得改写已有展示名、能力或价格。
+- 服务启动时的渠道/模型预置只允许在目标渠道族尚无任何模型时写入；一旦管理员已添加、改名、改价或删除模型，重启和「预置」按钮都不得再插入预设模型，也不得改写已有展示名或能力。WhatsToken Seedance 视频 `unit_price` 例外：预置时按编码像素 token 公式同步，不改展示名、图片价格或其它渠道。
 
 ## 金额与计费规范
 
@@ -67,6 +68,10 @@
 - 每一笔余额变动都要写 `wallet_ledger` 流水，流水表 append-only，不允许 `UPDATE` 或 `DELETE` 已有流水。
 - 会产生扣费的接口（生成提交、卡密兑换、充值）必须支持幂等键，重复请求返回首次结果而不是再扣一次。
 - 计费采用冻结-结算-退款三段式：提交时冻结估算金额，成功后按实际用量结算，失败全额释放。失败不计费。
+- 按秒计费的视频任务，`quantity` 是秒数（×条数）。结算和 `succeededCount` 必须按秒，不得按输出文件个数把一条 12 秒视频打成 `1/12` 部分成功并只扣 1 秒。
+- WhatsToken Seedance 按秒售价必须由编码像素 token 公式算出：`floor(W×H×(24s+1)/1024)` × 上游 $/M × 7.2 × 1.3。480p 用 864×496，720p 用 1248×704，1080p 用 1920×1088；不要再用「1080p = 20592 tok/s 再按 (res/1080)² 缩放」。480p 与 720p 分开计费和请求。预扣取公式与秒数对应的 token 量（含 +1 帧）；若上游返回 completion tokens，按同一公式结算并封顶冻结金额。
+- WhatsToken Seedance 的 `generate_audio` 不单独加价；售价只按秒 × 清晰度（及含视）。默认开启生成声音，与上游一致。
+- WhatsToken Seedance 最短时长 4 秒（2.0 官方区间 `[4, 15]`，2.5 为 `[4, 30]`）。`DEFAULT_MIN_SECONDS` 与提交校验都按 4；低于下限直接拒绝并提示「该模型最低生成时长4S」，不要静默把 1 秒改成 4 秒后再打上游。预设按钮仍为 5/10/15。
 - 余额、配额等权威数据只能以 PostgreSQL 为准；Redis 只用于缓存、队列、会话和限流，不得作为金额的权威来源。
 
 ## 安全规范

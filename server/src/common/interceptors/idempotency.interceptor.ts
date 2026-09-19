@@ -2,10 +2,10 @@ import { createHash } from "node:crypto";
 import { CallHandler, ExecutionContext, Inject, Injectable, NestInterceptor } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
 import { and, eq } from "drizzle-orm";
-import { catchError, from, Observable, switchMap, tap, throwError } from "rxjs";
+import { catchError, from, map, Observable, switchMap, throwError } from "rxjs";
 import { DB, type Database } from "../../db/db.module";
 import { idempotencyKeys } from "../../db/schema";
-import { IDEMPOTENT_KEY } from "../decorators";
+import { IDEMPOTENT_KEY, type IdempotentMeta } from "../decorators";
 import { badRequest, conflict } from "../errors";
 import type { RequestWithUser } from "../types";
 
@@ -24,13 +24,20 @@ export class IdempotencyInterceptor implements NestInterceptor {
     ) {}
 
     intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
-        const scope = this.reflector.getAllAndOverride<string>(IDEMPOTENT_KEY, [context.getHandler(), context.getClass()]);
-        if (!scope) return next.handle();
+        const meta = this.reflector.getAllAndOverride<IdempotentMeta>(IDEMPOTENT_KEY, [context.getHandler(), context.getClass()]);
+        if (!meta) return next.handle();
+        const { scope, optional } = meta;
 
         const request = context.switchToHttp().getRequest<RequestWithUser>();
+        // A live SSE response cannot be serialized and replayed. The header remains supported for
+        // blocking chat; streaming callers get normal at-most-once-per-connection semantics.
+        if (scope === "openapi.chat" && isStreamingBody(request.body)) return next.handle();
         const header = request.headers["idempotency-key"];
         const key = Array.isArray(header) ? header[0] : header;
-        if (!key) throw badRequest("IDEMPOTENCY_KEY_REQUIRED", "缺少 Idempotency-Key 请求头");
+        if (!key) {
+            if (optional) return next.handle();
+            throw badRequest("IDEMPOTENCY_KEY_REQUIRED", "缺少 Idempotency-Key 请求头");
+        }
 
         const userId = request.user!.id;
         const requestHash = hash(request.body ?? {});
@@ -39,7 +46,9 @@ export class IdempotencyInterceptor implements NestInterceptor {
             switchMap((result) => {
                 if ("replay" in result) return from([result.replay]);
                 return next.handle().pipe(
-                    tap((response) => void this.complete(userId, scope, key, response as Record<string, unknown>)),
+                    switchMap((response) =>
+                        from(this.complete(userId, scope, key, response as Record<string, unknown>)).pipe(map(() => response)),
+                    ),
                     // Release the claim on failure so the user can legitimately retry.
                     catchError((error) => from(this.release(userId, scope, key)).pipe(switchMap(() => throwError(() => error)))),
                 );
@@ -72,6 +81,10 @@ export class IdempotencyInterceptor implements NestInterceptor {
     private async release(userId: string, scope: string, key: string) {
         await this.db.delete(idempotencyKeys).where(and(eq(idempotencyKeys.userId, userId), eq(idempotencyKeys.scope, scope), eq(idempotencyKeys.key, key)));
     }
+}
+
+function isStreamingBody(value: unknown) {
+    return Boolean(value && typeof value === "object" && (value as { stream?: unknown }).stream === true);
 }
 
 function hash(value: unknown) {

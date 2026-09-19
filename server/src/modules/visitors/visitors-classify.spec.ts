@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyVisitor, eachUtcDate, isBotUserAgent, isIncompleteUserAgent, normalizeVisitorPath } from "./visitors-classify";
+import { classifyVisitor, eachUtcDate, isBotUserAgent, isIncompleteUserAgent, normalizeVisitorPath, sitePagePath } from "./visitors-classify";
 
 describe("normalizeVisitorPath", () => {
     it("strips query strings and rejects admin routes", () => {
@@ -8,6 +8,12 @@ describe("normalizeVisitorPath", () => {
         expect(normalizeVisitorPath("/admin")).toBeNull();
         expect(normalizeVisitorPath("/admin/users")).toBeNull();
         expect(normalizeVisitorPath("/")).toBe("/");
+        expect(sitePagePath("/canvas")).toBe("/canvas");
+        expect(sitePagePath("/canvas/bc992ac8-5570-4d2a-9f11-aaaaaaaaaaaa")).toBeNull();
+        expect(sitePagePath("/image")).toBe("/image");
+        expect(sitePagePath("/image/extra")).toBeNull();
+        expect(sitePagePath("/")).toBe("/");
+        expect(sitePagePath("/admin")).toBeNull();
     });
 });
 
