@@ -22,7 +22,7 @@ describe("cost-plus catalogue", () => {
     });
     it("prices image area bands, fixed rates and additional references", () => {
         expect(rates("dola-seedream-5-0-pro")).toMatchObject({ "1K": "0.294840", "2K": "0.589680" });
-        expect(rates("seedream-5-0-pro")).toMatchObject({ "1K": "0.353808", "4K": "0.707616" });
+        expect(rates("seedream-5-0-pro")).toMatchObject({ "1K": "0.353808", "2K": "0.707616" });
         expect(catalogPriceRows("seedream-5-0-pro", "1.3")![0].extraReferencePrice).toBe("0.023587");
         expect(rates("seedream-5-0-spg")["2K"]).toBe("0.229320");
         expect(rates("seedream-5.0-lite")["2K"]).toBe("0.117936");
