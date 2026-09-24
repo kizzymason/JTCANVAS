@@ -1,0 +1,45 @@
+/* Frontend-only semantic palettes. Body portals inherit this scope; admin does not. */
+html.gravity {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+}
+
+html.gravity.dark {
+    --background: #090b0d; --foreground: #f5f7fa; --card: #14171a; --card-foreground: #f5f7fa;
+    --popover: #1b1f23; --elevated: #1b1f23; --popover-foreground: #f5f7fa; --primary: #c3fa55; --primary-foreground: #090b0d;
+    --secondary: #1b1f23; --secondary-foreground: #f5f7fa; --muted: #14171a; --muted-foreground: #969fa6;
+    --accent: #24282c; --accent-foreground: #c3fa55; --border: #2c3136; --input: #2c3136; --ring: #c3fa55;
+    --sidebar: #090b0d; --sidebar-foreground: #f5f7fa; --sidebar-primary: #c3fa55; --sidebar-primary-foreground: #090b0d;
+    --sidebar-accent: #24282c; --sidebar-accent-foreground: #c3fa55; --sidebar-border: #252a2f; --sidebar-ring: #c3fa55;
+    --color-stone-950: #090b0d; --color-stone-900: #14171a; --color-stone-800: #2c3136; --color-stone-700: #41474d;
+    --color-stone-600: #6d777f; --color-stone-500: #89939b; --color-stone-400: #969fa6; --color-stone-300: #c9ced3;
+    --color-stone-200: #dce1e5; --color-stone-100: #f5f7fa; --color-stone-50: #fafbfc;
+    --brand-info-bg: #181c20; --brand-info-border: #30363c;
+}
+
+html.gravity:not(.dark) {
+    --background: #ffffff; --foreground: #171717; --card: #f7f8fa; --card-foreground: #171717;
+    --popover: #ffffff; --elevated: #ffffff; --popover-foreground: #171717; --primary: #111111; --primary-foreground: #ffffff;
+    --secondary: #f2f4f6; --secondary-foreground: #171717; --muted: #f5f6f7; --muted-foreground: #626b75;
+    --accent: #eceff1; --accent-foreground: #111111; --border: #e3e6ea; --input: #d7dce1; --ring: #111111;
+    --sidebar: #ffffff; --sidebar-foreground: #171717; --sidebar-primary: #111111; --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: #f2f4f6; --sidebar-accent-foreground: #171717; --sidebar-border: #e3e6ea; --sidebar-ring: #111111;
+    --color-stone-950: #111111; --color-stone-900: #171717; --color-stone-800: #262626; --color-stone-700: #404040;
+    --color-stone-600: #525252; --color-stone-500: #737373; --color-stone-400: #8a8a8a; --color-stone-300: #a3a3a3;
+    --color-stone-200: #d4d4d4; --color-stone-100: #f5f5f5; --color-stone-50: #fafafa;
+    --brand-info-bg: #f5f6f7; --brand-info-border: #e3e6ea;
+}
+
+.gravity :focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
+.gravity ::selection { background: color-mix(in srgb, var(--primary) 18%, transparent); }
+.gravity .text-primary-foreground { color: var(--primary-foreground); }
+.gravity .ant-btn { font-weight: 500; }
+.gravity .ant-modal-title, .gravity .ant-drawer-title { letter-spacing: .02em; }
+.gravity .ant-modal .ant-modal-content,
+.gravity .ant-modal .ant-modal-header,
+.gravity .ant-modal .ant-modal-body,
+.gravity .ant-modal .ant-modal-footer { background-color: var(--card); }
+.gravity .ant-input::placeholder, .gravity textarea::placeholder { color: var(--muted-foreground); }
+.gravity .ant-image { max-width: 100%; }
+.gravity .ant-alert-info { background: var(--brand-info-bg); border-color: var(--brand-info-border); }
+.gravity .ant-alert-info :is(.ant-alert-title,.ant-alert-description,.ant-alert-icon) { color: var(--foreground); }
+@media (prefers-reduced-motion: reduce) { .gravity *, .gravity *::before, .gravity *::after { scroll-behavior: auto !important; } }

@@ -116,8 +116,6 @@ function ResellerTable({ status, tiers, onChanged }: { status?: AdminResellerSta
                 </div>
             ),
         },
-        { title: t("admin.resellers.contact"), dataIndex: "contactName", width: 120, ellipsis: true },
-        { title: t("admin.resellers.phone"), dataIndex: "contactPhone", width: 130, ellipsis: true },
         {
             title: t("admin.resellers.status"),
             dataIndex: "status",
@@ -166,11 +164,9 @@ function ResellerTable({ status, tiers, onChanged }: { status?: AdminResellerSta
                             </Button>
                         </>
                     ) : null}
-                    {row.status === "approved" || row.status === "suspended" ? (
-                        <Button size="small" type="text" icon={<Settings2 className="size-3.5" />} onClick={() => setAdjusting(row)}>
-                            {t("admin.resellers.adjust")}
-                        </Button>
-                    ) : null}
+                    <Button size="small" type="text" icon={<Settings2 className="size-3.5" />} onClick={() => setAdjusting(row)}>
+                        {t("admin.resellers.adjust")}
+                    </Button>
                 </Space>
             ),
         },
@@ -226,10 +222,8 @@ function ResellerTable({ status, tiers, onChanged }: { status?: AdminResellerSta
                     items={[
                         { key: "username", label: t("admin.resellers.user"), children: detail?.username },
                         { key: "company", label: t("admin.resellers.company"), children: detail?.companyName || "-" },
-                        { key: "contact", label: t("admin.resellers.contact"), children: `${detail?.contactName || "-"} / ${detail?.contactPhone || "-"}` },
                         { key: "email", label: t("admin.resellers.email"), children: detail?.contactEmail || "-" },
                         { key: "website", label: t("admin.resellers.website"), children: detail?.website || "-" },
-                        { key: "volume", label: t("admin.resellers.expectedVolume"), children: detail?.expectedVolume || "-" },
                         { key: "useCase", label: t("admin.resellers.useCase"), children: <span className="whitespace-pre-wrap">{detail?.useCase || "-"}</span> },
                         { key: "tier", label: t("admin.resellers.tier"), children: detail?.tierName || "-" },
                         { key: "surcharge", label: t("admin.resellers.surcharge"), children: `${surchargeLabel(detail?.multiplierOverride ?? detail?.tierMultiplier)} (${coefficientLabel(detail?.multiplier ?? "1")})` },
@@ -332,7 +326,7 @@ function AdjustModal({ reseller, tiers, onClose, onDone }: { reseller: AdminRese
         form.setFieldsValue({
             tierId: reseller.tierId ?? undefined,
             surchargePercent: reseller.multiplierOverride === null ? null : new Decimal(reseller.multiplierOverride).times(100).toNumber(),
-            status: reseller.status,
+            status: reseller.status === "suspended" || reseller.status === "approved" ? reseller.status : undefined,
         });
     }, [form, reseller]);
 

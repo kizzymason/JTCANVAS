@@ -107,7 +107,7 @@ export class ResellerAdminService implements OnModuleInit {
         if (query.tierId) filters.push(eq(resellerAccounts.tierId, query.tierId));
         if (query.keyword?.trim()) {
             const like = `%${query.keyword.trim()}%`;
-            filters.push(or(ilike(users.username, like), ilike(resellerAccounts.companyName, like), ilike(resellerAccounts.contactName, like))!);
+            filters.push(or(ilike(users.username, like), ilike(resellerAccounts.companyName, like))!);
         }
         const where = filters.length ? and(...filters) : undefined;
 
@@ -124,12 +124,9 @@ export class ResellerAdminService implements OnModuleInit {
                     tierMultiplier: resellerTiers.multiplier,
                     multiplierOverride: resellerAccounts.multiplierOverride,
                     companyName: resellerAccounts.companyName,
-                    contactName: resellerAccounts.contactName,
-                    contactPhone: resellerAccounts.contactPhone,
                     contactEmail: resellerAccounts.contactEmail,
                     website: resellerAccounts.website,
                     useCase: resellerAccounts.useCase,
-                    expectedVolume: resellerAccounts.expectedVolume,
                     rejectReason: resellerAccounts.rejectReason,
                     appliedAt: resellerAccounts.appliedAt,
                     reviewedAt: resellerAccounts.reviewedAt,
@@ -180,19 +177,17 @@ export class ResellerAdminService implements OnModuleInit {
      */
     async review(userId: string, reviewerId: string, input: ReviewResellerDto) {
         const account = await this.account(userId);
-        if (account.status === "suspended") throw badRequest("RESELLER_SUSPENDED", "该代理商已被停用，请先恢复资格");
+        if (account.status !== "pending") throw badRequest("APPLICATION_NOT_PENDING", "当前没有待审核的等级提升申请");
 
         if (input.decision === "reject") {
             const reason = input.rejectReason?.trim();
             if (!reason) throw badRequest("REJECT_REASON_REQUIRED", "驳回时必须填写原因");
-            await this.db.transaction(async (tx) => {
-                await tx
-                    .update(resellerAccounts)
-                    .set({ status: "rejected", rejectReason: reason, reviewedAt: new Date(), reviewedBy: reviewerId, updatedAt: new Date() })
-                    .where(eq(resellerAccounts.userId, userId));
-                // Demote so a previously approved reseller loses console access immediately.
-                await tx.update(users).set({ role: "user", updatedAt: new Date() }).where(and(eq(users.id, userId), eq(users.role, "reseller")));
-            });
+            const [reviewed] = await this.db.update(resellerAccounts)
+                .set({ status: "rejected", rejectReason: reason, reviewedAt: new Date(), reviewedBy: reviewerId, updatedAt: new Date() })
+                .where(and(eq(resellerAccounts.userId, userId), eq(resellerAccounts.status, "pending")))
+                .returning({ userId: resellerAccounts.userId });
+            if (!reviewed) throw badRequest("APPLICATION_STATE_CHANGED", "申请状态已变化，请刷新后重试");
+            // Rejection keeps access, the current tier, its override, and the user's role unchanged.
             await this.afterCoefficientChange(userId);
             return { status: "rejected" as const };
         }
@@ -202,10 +197,11 @@ export class ResellerAdminService implements OnModuleInit {
         await this.tier(tierId);
 
         await this.db.transaction(async (tx) => {
-            await tx
-                .update(resellerAccounts)
+            const [reviewed] = await tx.update(resellerAccounts)
                 .set({ status: "approved", tierId, rejectReason: "", reviewedAt: new Date(), reviewedBy: reviewerId, updatedAt: new Date() })
-                .where(eq(resellerAccounts.userId, userId));
+                .where(and(eq(resellerAccounts.userId, userId), eq(resellerAccounts.status, "pending")))
+                .returning({ userId: resellerAccounts.userId });
+            if (!reviewed) throw badRequest("APPLICATION_STATE_CHANGED", "申请状态已变化，请刷新后重试");
             // An admin keeps their admin role; promotion only applies to plain users.
             await tx.update(users).set({ role: "reseller", updatedAt: new Date() }).where(and(eq(users.id, userId), eq(users.role, "user")));
         });
@@ -251,12 +247,9 @@ export class ResellerAdminService implements OnModuleInit {
                 tierMultiplier: resellerTiers.multiplier,
                 multiplierOverride: resellerAccounts.multiplierOverride,
                 companyName: resellerAccounts.companyName,
-                contactName: resellerAccounts.contactName,
-                contactPhone: resellerAccounts.contactPhone,
                 contactEmail: resellerAccounts.contactEmail,
                 website: resellerAccounts.website,
                 useCase: resellerAccounts.useCase,
-                expectedVolume: resellerAccounts.expectedVolume,
                 rejectReason: resellerAccounts.rejectReason,
                 appliedAt: resellerAccounts.appliedAt,
                 reviewedAt: resellerAccounts.reviewedAt,

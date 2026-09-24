@@ -16,6 +16,7 @@ export const SEEDANCE_CREATE_PATHS = [
 export type SeedanceReference = {
     mimeType: string;
     url: string;
+    role?: "first_frame" | "last_frame" | "reference_image" | "reference_video" | "reference_audio";
 };
 
 export function seedanceStatusPaths(taskId: string) {
@@ -71,6 +72,9 @@ export function seedanceCreateBody(input: {
     size?: string;
     generateAudio?: boolean;
     watermark?: boolean;
+    seed?: number;
+    cameraFixed?: boolean;
+    webSearch?: boolean;
     references?: SeedanceReference[];
     /** Overrides the Seedance resolution vocabulary for models that use their own (e.g. `2k`). */
     upstreamResolution?: string;
@@ -80,17 +84,17 @@ export function seedanceCreateBody(input: {
     const resolution = input.upstreamResolution ?? seedanceResolution(input.resolution);
     const ratio = seedanceAspectRatio(input.size) ?? (input.requireRatio ? "16:9" : undefined);
     const duration = input.seconds || 5;
-    const generateAudio = Boolean(input.generateAudio);
+    const generateAudio = input.generateAudio ?? true;
     const watermark = Boolean(input.watermark);
     const content: Array<Record<string, unknown>> = [{ type: "text", text: input.prompt }];
-    for (const reference of (input.references ?? []).slice(0, 7)) {
+    for (const reference of input.references ?? []) {
         const mime = reference.mimeType.toLowerCase();
         if (mime.startsWith("video/")) {
             content.push({ type: "video_url", video_url: { url: reference.url }, role: "reference_video" });
         } else if (mime.startsWith("audio/")) {
             content.push({ type: "audio_url", audio_url: { url: reference.url }, role: "reference_audio" });
         } else {
-            content.push({ type: "image_url", image_url: { url: reference.url }, role: "reference_image" });
+            content.push({ type: "image_url", image_url: { url: reference.url }, role: reference.role ?? "reference_image" });
         }
     }
 
@@ -112,7 +116,18 @@ export function seedanceCreateBody(input: {
         watermark,
         content,
         metadata,
+        ...(input.seed !== undefined ? { seed: input.seed } : {}),
+        ...(input.cameraFixed !== undefined ? { camera_fixed: input.cameraFixed } : {}),
+        ...(input.webSearch !== undefined ? { web_search: input.webSearch } : {}),
     };
+    // WhatsToken's documented gateway fields; content remains available for Ark fallback.
+    const refs = input.references ?? [];
+    const images = refs.filter((ref) => ref.mimeType.startsWith("image/"));
+    const videos = refs.filter((ref) => ref.mimeType.startsWith("video/"));
+    const audios = refs.filter((ref) => ref.mimeType.startsWith("audio/"));
+    if (images.length) body.images = images.map((ref) => ({ url: ref.url, role: ref.role ?? "reference_image" }));
+    if (videos.length) body.videos = videos.map((ref) => ref.url);
+    if (audios.length) body.audios = audios.map((ref) => ref.url);
     if (ratio) {
         body.aspect_ratio = ratio;
         body.ratio = ratio;

@@ -1,6 +1,6 @@
-import { Button, Layout, Menu, Tag } from "antd";
-import { ArrowLeft, BookOpen, Gauge, KeyRound, Layers, ScrollText, UserRound } from "lucide-react";
-import { useMemo } from "react";
+import { Button, Drawer, Layout, Menu, Tag } from "antd";
+import { ArrowLeft, BookOpen, Gauge, KeyRound, Layers, Menu as MenuIcon, ScrollText, UserRound } from "lucide-react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 
@@ -42,6 +42,7 @@ export default function OpenPlatformLayout() {
     const navigate = useNavigate();
     const user = useAuthStore((state) => state.user);
     const site = useAuthStore((state) => state.site);
+    const [navigationOpen, setNavigationOpen] = useState(false);
 
     // Longest match wins so /open/console/logs does not also light up the dashboard.
     const selectedKey = useMemo(() => {
@@ -64,30 +65,34 @@ export default function OpenPlatformLayout() {
     return (
         <Layout className="h-dvh overflow-hidden">
             <Sider
-                width={232}
-                theme="light"
-                className="z-20 border-r-2 border-stone-300 shadow-[8px_0_28px_rgba(28,25,23,0.12)] dark:border-stone-600 dark:shadow-[8px_0_32px_rgba(0,0,0,0.55)] [&>.ant-layout-sider-children]:flex [&>.ant-layout-sider-children]:h-full [&>.ant-layout-sider-children]:min-h-0 [&>.ant-layout-sider-children]:flex-col [&>.ant-layout-sider-children]:overflow-hidden"
+                width={216}
+                theme="dark"
+                className="!hidden border-r border-border md:!block [&>.ant-layout-sider-children]:flex [&>.ant-layout-sider-children]:h-full [&>.ant-layout-sider-children]:min-h-0 [&>.ant-layout-sider-children]:flex-col [&>.ant-layout-sider-children]:overflow-hidden"
             >
-                <div className="flex h-14 shrink-0 items-center border-b border-stone-200 px-4 dark:border-stone-700">
+                <div className="flex h-16 shrink-0 items-center gap-2 border-b border-border px-4">
+                    <img src="/logo.svg?v=jtcanvas" alt="" aria-hidden="true" className="size-[26px] shrink-0 object-contain" />
                     <span className="truncate text-sm font-semibold">{t("openPlatform.title")}</span>
                 </div>
                 <div className="hide-scrollbar min-h-0 flex-1 overflow-y-auto">
                     <Menu mode="inline" selectedKeys={[selectedKey]} items={menuItems} className="border-none" style={{ background: "transparent" }} />
                 </div>
             </Sider>
+            <Drawer open={navigationOpen} onClose={() => setNavigationOpen(false)} placement="left" title={t("openPlatform.title")} size={260}>
+                <Menu mode="inline" selectedKeys={[selectedKey]} items={menuItems} onClick={() => setNavigationOpen(false)} />
+            </Drawer>
 
             <Layout className="min-w-0">
-                <Header className="flex h-14 items-center justify-between border-b border-stone-200 px-6 dark:border-stone-800" style={{ height: 56, lineHeight: "56px" }}>
-                    <span className="text-sm font-medium text-stone-950 dark:text-stone-100">{site.siteName}</span>
+                <Header className="flex items-center justify-between gap-2 border-b border-border !px-4" style={{ height: 64, lineHeight: "64px" }}>
+                    <div className="flex min-w-0 items-center gap-2"><Button type="text" className="md:!hidden" icon={<MenuIcon size={20} />} aria-label="打开控制台导航" onClick={() => setNavigationOpen(true)} /><span className="truncate text-sm font-medium text-foreground">{site.siteName}</span></div>
                     <div className="flex items-center gap-2 leading-none">
                         {user?.role === "admin" ? <Tag color="gold">{t("openPlatform.adminPreview")}</Tag> : null}
-                        <span className="px-1 text-sm text-stone-600 dark:text-stone-300">{user?.username}</span>
+                        <span className="hidden px-1 text-sm text-muted-foreground sm:block">{user?.username}</span>
                         <Button type="text" icon={<ArrowLeft className="size-4" />} onClick={() => navigate("/canvas")}>
                             {t("openPlatform.backToApp")}
                         </Button>
                     </div>
                 </Header>
-                <Content className="min-h-0 overflow-y-auto bg-background p-6">
+                <Content className="min-h-0 overflow-y-auto bg-background p-4 lg:p-6">
                     <Outlet />
                 </Content>
             </Layout>

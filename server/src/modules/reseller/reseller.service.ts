@@ -1,3 +1,4 @@
+import { scaleTokenPrices } from "../pricing/token-pricing";
 import { Inject, Injectable } from "@nestjs/common";
 import { and, desc, eq, gte, inArray, lt, lte, sql } from "drizzle-orm";
 import { DB, type Database } from "../../db/db.module";
@@ -12,10 +13,11 @@ import { WalletService } from "../wallet/wallet.service";
 import { utcDateString } from "../visitors/visitors-classify";
 import { UsageRecorderService } from "../openapi/usage-recorder.service";
 import type { ApplyResellerDto, ResellerLogQueryDto } from "./dto/reseller.dto";
+import { hasOpenPlatformAccess } from "./reseller-access";
 
 export type ResellerStatusView = {
     status: "none" | "pending" | "approved" | "rejected" | "suspended";
-    /** Whether the console is reachable. Admins qualify without their own application. */
+    /** Basic access remains available unless explicitly suspended. */
     canUseConsole: boolean;
     tierName: string | null;
     /** Signed surcharge, matching how the admin configures it. */
@@ -27,12 +29,9 @@ export type ResellerStatusView = {
     reviewedAt: Date | null;
     profile: {
         companyName: string;
-        contactName: string;
-        contactPhone: string;
         contactEmail: string;
         website: string;
         useCase: string;
-        expectedVolume: string;
     } | null;
 };
 
@@ -51,55 +50,39 @@ export class ResellerService {
         private readonly usage: UsageRecorderService,
     ) {}
 
-    /**
-     * Submits or resubmits an application. A rejected applicant reuses the same row, which keeps the
-     * review history on one primary key instead of accumulating duplicates.
-     */
+    /** Requests a better reseller tier. Basic access is created automatically at the public price. */
     async apply(userId: string, input: ApplyResellerDto) {
-        const existing = await this.accountFor(userId);
-        if (existing?.status === "approved") throw badRequest("ALREADY_RESELLER", "当前账号已是代理商");
-        if (existing?.status === "pending") throw badRequest("APPLICATION_PENDING", "入驻申请正在审核中");
+        const existing = await this.ensureEnrolled(userId);
+        if (existing?.status === "pending") throw badRequest("APPLICATION_PENDING", "等级提升申请正在审核中");
         if (existing?.status === "suspended") throw forbidden("代理商资格已被暂停，请联系平台管理员");
 
         const values = {
             companyName: input.companyName.trim(),
-            contactName: input.contactName.trim(),
-            contactPhone: input.contactPhone.trim(),
             contactEmail: input.contactEmail?.trim() ?? "",
             website: input.website?.trim() ?? "",
             useCase: input.useCase.trim(),
-            expectedVolume: input.expectedVolume?.trim() ?? "",
         };
 
-        await this.db
-            .insert(resellerAccounts)
-            .values({ userId, status: "pending", ...values })
-            .onConflictDoUpdate({
-                target: resellerAccounts.userId,
-                set: { ...values, status: "pending", rejectReason: "", appliedAt: new Date(), reviewedAt: null, reviewedBy: null, updatedAt: new Date() },
-            });
+        const [submitted] = await this.db.update(resellerAccounts)
+            .set({ ...values, status: "pending", rejectReason: "", appliedAt: new Date(), reviewedAt: null, reviewedBy: null, updatedAt: new Date() })
+            .where(and(eq(resellerAccounts.userId, userId), inArray(resellerAccounts.status, ["approved", "rejected"])))
+            .returning({ userId: resellerAccounts.userId });
+        if (!submitted) throw badRequest("APPLICATION_STATE_CHANGED", "申请状态已变化，请刷新后重试");
         await this.resellerPricing.invalidate(userId);
         return this.status(userId);
     }
 
-    /**
-     * Contact-detail maintenance from the personal centre. Deliberately separate from `apply` so an
-     * approved reseller editing a phone number cannot accidentally re-open a review.
-     */
+    /** Updates the information used for a tier review without changing access by itself. */
     async updateProfile(userId: string, input: ApplyResellerDto, role?: string) {
-        const account = await this.assertApproved(userId, role);
-        // An admin browsing the console has no application row to maintain.
+        const account = await this.assertAccess(userId, role);
         if (!account) throw badRequest("NO_RESELLER_PROFILE", "当前账号没有入驻资料可维护");
         await this.db
             .update(resellerAccounts)
             .set({
                 companyName: input.companyName.trim(),
-                contactName: input.contactName.trim(),
-                contactPhone: input.contactPhone.trim(),
                 contactEmail: input.contactEmail?.trim() ?? "",
                 website: input.website?.trim() ?? "",
                 useCase: input.useCase.trim(),
-                expectedVolume: input.expectedVolume?.trim() ?? "",
                 updatedAt: new Date(),
             })
             .where(eq(resellerAccounts.userId, userId));
@@ -107,12 +90,11 @@ export class ResellerService {
     }
 
     async status(userId: string, role?: string): Promise<ResellerStatusView> {
-        const row = await this.accountFor(userId);
-        const isAdmin = role === "admin";
+        const row = await this.ensureEnrolled(userId);
         if (!row) {
             return {
                 status: "none",
-                canUseConsole: isAdmin,
+                canUseConsole: true,
                 tierName: null,
                 surcharge: toMoneyString(0),
                 multiplier: NEUTRAL_MULTIPLIER,
@@ -126,7 +108,7 @@ export class ResellerService {
         const surcharge = row.multiplierOverride ?? row.tierMultiplier ?? toMoneyString(0);
         return {
             status: row.status,
-            canUseConsole: isAdmin || row.status === "approved",
+            canUseConsole: hasOpenPlatformAccess(row.status),
             tierName: row.tierName ?? null,
             surcharge: toMoneyString(surcharge),
             multiplier: effectiveMultiplier({ status: row.status, multiplierOverride: row.multiplierOverride, tierMultiplier: row.tierMultiplier }),
@@ -135,12 +117,9 @@ export class ResellerService {
             reviewedAt: row.reviewedAt,
             profile: {
                 companyName: row.companyName,
-                contactName: row.contactName,
-                contactPhone: row.contactPhone,
                 contactEmail: row.contactEmail,
                 website: row.website,
                 useCase: row.useCase,
-                expectedVolume: row.expectedVolume,
             },
         };
     }
@@ -161,10 +140,7 @@ export class ResellerService {
                 minCharge: toMoneyString(applyMultiplier(model.minCharge, multiplier)),
                 extraReferencePrice: toMoneyString(applyMultiplier(model.extraReferencePrice, multiplier)),
                 specPrices: Object.fromEntries(Object.entries(model.specPrices).map(([spec, price]) => [spec, toMoneyString(applyMultiplier(price, multiplier))])),
-                tokenPrices: {
-                    input: toMoneyString(applyMultiplier(model.tokenPrices.input, multiplier)),
-                    output: toMoneyString(applyMultiplier(model.tokenPrices.output, multiplier)),
-                },
+                tokenPrices: scaleTokenPrices(model.tokenPrices, multiplier),
                 features: model.features,
             })),
         };
@@ -313,18 +289,23 @@ export class ResellerService {
         };
     }
 
-    /**
-     * Throws unless the caller may use the console. Admins are always allowed: they need the console
-     * to test and support the platform, and requiring them to onboard as their own reseller would
-     * mean an operator has to fake an application before they can look at anything.
-     */
-    async assertApproved(userId: string, role?: string) {
-        const row = await this.accountFor(userId);
-        if (role === "admin") return row;
-        if (!row) throw forbidden("请先提交开放平台入驻申请");
-        if (row.status === "pending") throw forbidden("入驻申请正在审核中");
-        if (row.status !== "approved") throw forbidden("当前账号没有开放平台权限");
+    /** Enrollment and tier review do not grant an exception to explicit suspension. */
+    async assertAccess(userId: string, role?: string) {
+        const row = await this.ensureEnrolled(userId);
+        if (!row || !hasOpenPlatformAccess(row.status)) throw forbidden("开放平台权限已停用，请联系平台管理员");
         return row;
+    }
+
+    /** Creates the zero-discount account on first access, without requiring an application. */
+    private async ensureEnrolled(userId: string) {
+        const existing = await this.accountFor(userId);
+        if (existing) return existing;
+        await this.db
+            .insert(resellerAccounts)
+            // No tier means public price even if an administrator changes the default review tier.
+            .values({ userId, status: "approved", tierId: null, multiplierOverride: null })
+            .onConflictDoNothing({ target: resellerAccounts.userId });
+        return this.accountFor(userId);
     }
 
     private async distinctKeysSince(userId: string, from: Date, to: Date | null) {
@@ -347,12 +328,9 @@ export class ResellerService {
                 tierName: resellerTiers.name,
                 tierMultiplier: resellerTiers.multiplier,
                 companyName: resellerAccounts.companyName,
-                contactName: resellerAccounts.contactName,
-                contactPhone: resellerAccounts.contactPhone,
                 contactEmail: resellerAccounts.contactEmail,
                 website: resellerAccounts.website,
                 useCase: resellerAccounts.useCase,
-                expectedVolume: resellerAccounts.expectedVolume,
                 rejectReason: resellerAccounts.rejectReason,
                 appliedAt: resellerAccounts.appliedAt,
                 reviewedAt: resellerAccounts.reviewedAt,

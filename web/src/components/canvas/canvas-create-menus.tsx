@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { isCanvasNodeServiceEnabled, useSiteServices } from "@/hooks/use-site-services";
-import { useThemeStore } from "@/stores/use-theme-store";
+import { useFrontendThemeStore } from "@/stores/use-frontend-theme-store";
 import { listNodeDefinitions, useNodeRegistryVersion } from "@/lib/canvas/node-registry";
 import { CanvasNodeType, type ConnectionHandle, type Position } from "@/types/canvas";
 
@@ -22,7 +22,7 @@ export function ConnectionCreateMenu({
     onCreate: (type: CanvasNodeType.Image | CanvasNodeType.Text | CanvasNodeType.Config | CanvasNodeType.Video | CanvasNodeType.Audio) => void;
     onClose: () => void;
 }) {
-    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const theme = canvasThemes[useFrontendThemeStore((state) => state.theme)];
     const { t } = useTranslation();
     const services = useSiteServices();
     return (
@@ -78,7 +78,7 @@ export function ConnectionCreateOption({ theme, icon, title, description, onClic
 }
 
 export function NodeCreateMenu({ screen, onCreate, onClose }: { screen: Position; onCreate: (type: string) => void; onClose: () => void }) {
-    const theme = canvasThemes[useThemeStore((state) => state.theme)];
+    const theme = canvasThemes[useFrontendThemeStore((state) => state.theme)];
     const { t } = useTranslation();
     const services = useSiteServices();
     useNodeRegistryVersion();

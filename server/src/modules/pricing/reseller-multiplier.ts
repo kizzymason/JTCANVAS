@@ -5,7 +5,7 @@ export const NEUTRAL_MULTIPLIER = toMoneyString(1);
 
 /**
  * A tier stores the *surcharge*, not the coefficient: 0.2 means "20% above the public price" and
- * -0.2 means "20% off". Only an approved reseller gets a coefficient other than 1, and an explicit
+ * -0.2 means "20% off". Existing approved pricing remains valid during and after tier review; an explicit
  * per-account override always beats the tier it belongs to.
  */
 export type MultiplierSource = {
@@ -24,7 +24,8 @@ export function coefficientFromSurcharge(surcharge: MoneyInput) {
 }
 
 export function effectiveMultiplier(source: MultiplierSource | null | undefined) {
-    if (!source || source.status !== "approved") return NEUTRAL_MULTIPLIER;
+    // Review never changes the existing price; only an administrator changes the tier/override.
+    if (!source || !["approved", "pending", "rejected"].includes(source.status ?? "")) return NEUTRAL_MULTIPLIER;
     const override = source.multiplierOverride;
     if (override !== null && override !== undefined && override !== "") return coefficientFromSurcharge(override);
     if (source.tierMultiplier) return coefficientFromSurcharge(source.tierMultiplier);

@@ -11,10 +11,11 @@ import { formatMoney } from "@/services/api/models";
 import { PIAPI_BASE_URL, PIAPI_SEEDREAM_LABELS, PIAPI_SEEDREAM_TASK_TYPES } from "@/lib/piapi/piapi-models";
 import { defaultAspectPresets, defaultVideoAspectPresets, parseAspectPresets, piapiAspectPresets } from "@/lib/aspect-presets";
 import { DEFAULT_MODEL_FEATURES, IMAGE_RESOLUTIONS } from "@/lib/model-features";
+import { ChannelRepricing } from "./components/channel-repricing";
 import { AspectPresetEditor } from "./components/aspect-preset-editor";
 
 const capabilityOptions = ["image", "video", "text", "audio"] as const;
-const billingOptions = ["per_image", "per_second", "per_call"] as const;
+const billingOptions = ["per_image", "per_second", "per_call", "per_token"] as const;
 
 /**
  * Channels, their models and each model's price. Everything here used to live in the browser; it is
@@ -208,6 +209,7 @@ export default function AdminChannelsPage() {
                 destroyOnHidden
                 afterOpenChange={(open) => open && form.setFieldsValue(channel ? { ...channel, apiKey: "" } : { name: "", baseUrl: "https://api.openai.com", apiFormat: "openai", apiKey: "", enabled: true, priority: 100 })}
             >
+                {channel?.supportsRepricing && <ChannelRepricing key={channel.id} channel={channel} onSaved={onSaved} />}
                 <Form form={form} layout="vertical" requiredMark={false}>
                     <Form.Item name="name" label={t("admin.channels.name")} rules={[{ required: true }]}>
                         <Input maxLength={128} />

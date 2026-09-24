@@ -1,0 +1,46 @@
+{
+  "generator": "Built-in imagegen",
+  "reference": "A · 灵感引力 homepage",
+  "assets": [
+    {
+      "id": "hero",
+      "prompt": "Generate a production website photographic brand asset, NOT a UI screenshot. Reference image is STYLE/CONTENT REFERENCE ONLY. No UI, no text, no letters, no watermarks, no logos or borders anywhere. Beautiful high resolution image, sophisticated cinematic color grading matching dark green-black and warm champagne brand palette. Ultra wide 3:1 cinematic panorama. Silver whale floating through terracotta desert dunes below gigantic moon, lone cloaked traveler small on dune, dust and warm sunset, epic photorealistic luxury film still. Whale mostly RIGHT two thirds. LEFT third very dark empty near-black atmospheric sky and dunes with enough clean negative space for white website title overlay. Match exact narrative/composition of uploaded website hero, but render only clean original scene.",
+      "path": "C:\\Users\\Administrator\\.codex\\generated_images\\01a0ca46-8874-7663-896e-9828f052f842\\exec-2daa86d5-f97d-425a-aa59-9bde6140fce8.png"
+    },
+    {
+      "id": "image",
+      "prompt": "Generate a production website photographic brand asset, NOT a UI screenshot. Reference image is STYLE/CONTENT REFERENCE ONLY. No UI, no text, no letters, no watermarks, no logos or borders anywhere. Beautiful high resolution image, sophisticated cinematic color grading matching dark green-black and warm champagne brand palette. 16:9 landscape cinematic portrait of beautiful adult East Asian woman looking slightly upward amid white wildflowers and rich dark green foliage. Soft natural light, elegant photographic skin texture, premium film still, dark edges for UI overlay.",
+      "path": "C:\\Users\\Administrator\\.codex\\generated_images\\01a0ca46-8874-7663-896e-9828f052f842\\exec-1f0d5e2d-b12a-4be7-bed0-9fcfec664068.png"
+    },
+    {
+      "id": "video",
+      "prompt": "Generate a production website photographic brand asset, NOT a UI screenshot. Reference image is STYLE/CONTENT REFERENCE ONLY. No UI, no text, no letters, no watermarks, no logos or borders anywhere. Beautiful high resolution image, sophisticated cinematic color grading matching dark green-black and warm champagne brand palette. 16:9 landscape cinematic underwater portrait of adult woman in flowing pale dress looking toward shafts of sunlight through blue ocean surface. Rich teal water, air bubbles, photorealistic poetic film still, dark lower edge.",
+      "path": "C:\\Users\\Administrator\\.codex\\generated_images\\01a0ca46-8874-7663-896e-9828f052f842\\exec-a106e2f2-daa5-486b-9d51-76605078bb2a.png"
+    },
+    {
+      "id": "canvas",
+      "prompt": "Generate a production website photographic brand asset, NOT a UI screenshot. Reference image is STYLE/CONTENT REFERENCE ONLY. No UI, no text, no letters, no watermarks, no logos or borders anywhere. Beautiful high resolution image, sophisticated cinematic color grading matching dark green-black and warm champagne brand palette. 16:9 landscape surreal monumental weathered stone arch standing on still reflective water, distant snow mountains and sky through arch, one tiny cloaked traveler, premium cinematic photography, cool blue and warm stone.",
+      "path": "C:\\Users\\Administrator\\.codex\\generated_images\\01a0ca46-8874-7663-896e-9828f052f842\\exec-4852cab5-180d-4bc9-a737-54b775ff48a5.png"
+    },
+    {
+      "id": "architecture",
+      "prompt": "Generate a production website photographic brand asset, NOT a UI screenshot. Reference image is STYLE/CONTENT REFERENCE ONLY. No UI, no text, no letters, no watermarks, no logos or borders anywhere. Beautiful high resolution image, sophisticated cinematic color grading matching dark green-black and warm champagne brand palette. Portrait 4:5 architectural fashion photograph of adult woman wearing flowing deep forest-green gown on monumental curved white concrete staircase, distant mountains framed by architectural arch, sunlit, premium editorial image.",
+      "path": "C:\\Users\\Administrator\\.codex\\generated_images\\01a0ca46-8874-7663-896e-9828f052f842\\exec-afecf032-9b10-4b05-8615-887e00a0c005.png"
+    },
+    {
+      "id": "ice",
+      "prompt": "Generate a production website photographic brand asset, NOT a UI screenshot. Reference image is STYLE/CONTENT REFERENCE ONLY. No UI, no text, no letters, no watermarks, no logos or borders anywhere. Beautiful high resolution image, sophisticated cinematic color grading matching dark green-black and warm champagne brand palette. Portrait 4:5 close-up of adult woman with luminous skin and white hair surrounded by transparent icy glass crystals and water droplets, warm highlights cool shadows, high-end beauty photography.",
+      "path": "C:\\Users\\Administrator\\.codex\\generated_images\\01a0ca46-8874-7663-896e-9828f052f842\\exec-869fc816-6639-4729-a2ee-ce72a3857489.png"
+    },
+    {
+      "id": "clouds",
+      "prompt": "Generate a production website photographic brand asset, NOT a UI screenshot. Reference image is STYLE/CONTENT REFERENCE ONLY. No UI, no text, no letters, no watermarks, no logos or borders anywhere. Beautiful high resolution image, sophisticated cinematic color grading matching dark green-black and warm champagne brand palette. Portrait 4:5 surreal glass modernist house hovering among soft pink clouds, pink cherry blossom branches framing, blue planet on horizon, sophisticated cinematic architecture art.",
+      "path": "C:\\Users\\Administrator\\.codex\\generated_images\\01a0ca46-8874-7663-896e-9828f052f842\\exec-13aa92c9-788e-4629-98b0-6378cf95706c.png"
+    },
+    {
+      "id": "panther",
+      "prompt": "Generate a production website photographic brand asset, NOT a UI screenshot. Reference image is STYLE/CONTENT REFERENCE ONLY. No UI, no text, no letters, no watermarks, no logos or borders anywhere. Beautiful high resolution image, sophisticated cinematic color grading matching dark green-black and warm champagne brand palette. Portrait 4:5 photorealistic black panther with bright green eyes amid dark lush forest leaves and white flowers, dappled light, intense beautiful gaze, detailed glossy black fur.",
+      "path": "C:\\Users\\Administrator\\.codex\\generated_images\\01a0ca46-8874-7663-896e-9828f052f842\\exec-9307fa2e-9956-44af-a96b-8ef2ca04a238.png"
+    }
+  ]
+}

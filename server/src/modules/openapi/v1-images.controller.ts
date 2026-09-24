@@ -5,8 +5,9 @@ import { Idempotent } from "../../common/decorators";
 import { StorageService } from "../storage/storage.service";
 import { clientIp, type ApiCaller, type RequestWithApiCaller } from "./api-key.guard";
 import { ImageGenerationDto } from "./dto/openai.dto";
-import { upstreamError } from "./openai-errors";
-import { assertReferenceUrls, mapImageBackground, mapImageQuality, type ImageResponseItem } from "./openai-mappers";
+import { invalidRequest, upstreamError } from "./openai-errors";
+import { mapImageBackground, type ImageResponseItem } from "./openai-mappers";
+import { imageGenerationInput } from "./generation-input";
 import { CurrentCaller, OpenApiEndpoint } from "./openapi.decorators";
 import { OpenPlatformService } from "./open-platform.service";
 import { TaskWaiterService } from "./task-waiter.service";
@@ -29,17 +30,18 @@ export class V1ImagesController {
         this.waitTimeoutMs = config.get<number>("openPlatform.imageWaitTimeoutMs")!;
     }
 
-    @Post("generations")
+    @Post(["generations", "edits"])
     @HttpCode(200)
     // Optional: the OpenAI protocol has no idempotency header, but honouring one costs nothing.
     @Idempotent("openapi.images", { optional: true })
     @ApiOperation({ summary: "生成图片（同步返回）" })
     async generations(@CurrentCaller() caller: ApiCaller, @Body() body: ImageGenerationDto, @Req() request: RequestWithApiCaller) {
         const ip = clientIp(request);
-        const call = { endpoint: "/v1/images/generations", capability: "image" as const, model: body.model, clientIp: ip };
+        const call = { endpoint: (request.url ?? "/v1/images/generations").split("?")[0]!.replace(/^\/api/, ""), capability: "image" as const, model: body.model, clientIp: ip };
         return this.openapi.runBilled(caller, call, async () => {
             const model = await this.openapi.resolveModel(caller, body.model, "image");
-            const references = body.image?.length ? assertReferenceUrls(body.image, "image") : undefined;
+            const input = imageGenerationInput(body, model);
+            if (call.endpoint.endsWith("/edits") && !input.referenceMedia.length) throw invalidRequest("image is required for image edits.", "invalid_reference", "image");
 
             const task = await this.openapi.submitTask(
                 caller,
@@ -48,10 +50,8 @@ export class V1ImagesController {
                     model: model.value,
                     prompt: body.prompt,
                     count: body.n ?? 1,
-                    size: body.size,
-                    quality: mapImageQuality(body.quality),
+                    ...input,
                     background: mapImageBackground(body.background),
-                    references,
                     source: "openapi",
                 },
                 call,
@@ -59,6 +59,10 @@ export class V1ImagesController {
 
             const settled = await this.waiter.waitForCompletion(caller.userId, task.id, this.waitTimeoutMs);
             if (settled.status === "failed" || settled.status === "cancelled") {
+                const failure = settled.params.providerFailure as { upstreamStatus?: number; upstreamCode?: string; param?: string } | undefined;
+                if (failure?.upstreamStatus === 400 || failure?.upstreamStatus === 422) {
+                    throw invalidRequest(settled.error || "Upstream rejected the request.", failure.upstreamCode, failure.param);
+                }
                 throw upstreamError(settled.error || "Image generation failed.", "generation_failed");
             }
             const data = await this.toImageData(caller.userId, settled.outputFileIds, body.response_format ?? "url");

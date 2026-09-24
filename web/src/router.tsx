@@ -2,9 +2,8 @@ import { lazy, Suspense, type ReactNode } from "react";
 import { Spin } from "antd";
 import { createBrowserRouter, Outlet } from "react-router-dom";
 
-import { AccountRouteRedirect } from "@/components/account/account-drawer";
-import { AuthModal } from "@/components/auth/auth-modal";
-import { AnalyticsTracker } from "@/components/layout/analytics-tracker";
+import { AccountRouteRedirect } from "@/components/account/account-route-redirect";
+import { useAuthModalStore } from "@/stores/use-auth-modal-store";
 import { RouteErrorFallback } from "@/components/layout/route-error-fallback";
 import { LoginRouteRedirect, RequireAdmin, RequireAuth, RequireReseller, RequireSiteService } from "@/components/layout/route-guards";
 import UserLayout from "@/layouts/user-layout";
@@ -33,6 +32,7 @@ const AdminStoragePage = lazy(() => import("@/pages/admin/storage"));
 const AdminServicesPage = lazy(() => import("@/pages/admin/services"));
 const AdminPiapiPage = lazy(() => import("@/pages/admin/piapi"));
 const AdminAuditPage = lazy(() => import("@/pages/admin/audit"));
+const AdminHomepagePage = lazy(() => import("@/pages/admin/homepage"));
 const AdminSettingsPage = lazy(() => import("@/pages/admin/settings"));
 const AdminAnnouncementsPage = lazy(() => import("@/pages/admin/announcements"));
 const AdminDocsPage = lazy(() => import("@/pages/admin/docs"));
@@ -50,6 +50,7 @@ const OpenConsoleDocsPage = lazy(() => import("@/pages/open/console/docs"));
 const AdminCardShopPage = lazy(() => import("@/pages/admin/card-shop"));
 const CardShopPage = lazy(() => import("@/pages/cards"));
 const CardOrdersPage = lazy(() => import("@/pages/cards/orders"));
+const AuthModal = lazy(() => import("@/components/auth/auth-modal").then(({ AuthModal: Component }) => ({ default: Component })));
 
 function Loading() {
     return (
@@ -64,10 +65,13 @@ function Lazy({ children }: { children: ReactNode }) {
 }
 
 function AppShell() {
+    const authModalOpen = useAuthModalStore((state) => state.open);
     return (
         <>
-            <AuthModal />
-            <Outlet />
+            {authModalOpen ? <Suspense fallback={<div className="fixed inset-0 z-[1100] grid place-items-center bg-black/35 text-sm text-white" role="status">正在打开登录…</div>}><AuthModal /></Suspense> : null}
+            <UserLayout>
+                <Outlet />
+            </UserLayout>
         </>
     );
 }
@@ -79,12 +83,7 @@ export const router = createBrowserRouter([
         children: [
             // Public: the marketing homepage. Login/register is a dialog, not a standalone page.
             {
-                element: (
-                    <UserLayout>
-                        <AnalyticsTracker />
-                        <Outlet />
-                    </UserLayout>
-                ),
+                element: <Outlet />,
                 children: [
                     { path: "/", element: <HomePage /> },
                     // The API reference is public on purpose: downstream engineers evaluate before applying.
@@ -126,10 +125,7 @@ export const router = createBrowserRouter([
             {
                 element: (
                     <RequireAuth>
-                        <UserLayout>
-                            <AnalyticsTracker />
-                            <Outlet />
-                        </UserLayout>
+                        <Outlet />
                     </RequireAuth>
                 ),
                 children: [
@@ -264,6 +260,7 @@ export const router = createBrowserRouter([
                     </RequireAdmin>
                 ),
                 children: [
+                    { path: "homepage", element: <Lazy><AdminHomepagePage /></Lazy> },
                     {
                         index: true,
                         element: (

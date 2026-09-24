@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { App, Button } from "antd";
-import { Check, CheckSquare, Download, FileUp, Plus, Trash2 } from "lucide-react";
+import { App, Button, Empty, Input } from "antd";
+import { Check, CheckSquare, Download, FileUp, Plus, Search, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { readZip } from "@/lib/zip";
@@ -32,6 +32,8 @@ export default function CanvasPage() {
     const setDeleteIds = useCanvasUiStore((state) => state.setDeleteProjectIds);
     const clearSelectedIds = useCanvasUiStore((state) => state.clearSelectedProjectIds);
     const [selecting, setSelecting] = useState(false);
+    const [keyword, setKeyword] = useState("");
+    const visibleProjects = projects.filter((project) => project.title.toLowerCase().includes(keyword.trim().toLowerCase()));
 
     const stopEditing = useCanvasUiStore((state) => state.stopEditingProject);
 
@@ -115,7 +117,7 @@ export default function CanvasPage() {
 
     return (
         <main className="h-full overflow-auto bg-background text-stone-950 dark:text-stone-100">
-            <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 py-10">
+            <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-6 px-4 py-7 sm:px-7">
                 <header className="flex flex-wrap items-end justify-between gap-4 border-b border-stone-200 pb-6 dark:border-stone-800">
                     <div>
                         <h1 className="text-3xl font-semibold">{t("canvas.title")}</h1>
@@ -126,7 +128,7 @@ export default function CanvasPage() {
                                 <Button
                                     type="primary"
                                     disabled={!hydrated || !projects.length}
-                                    className="!border-neutral-950 !bg-neutral-950 !text-white hover:!border-black hover:!bg-black disabled:!border-neutral-400 disabled:!bg-neutral-400 disabled:!text-white dark:disabled:!border-neutral-600 dark:disabled:!bg-neutral-600"
+                                    danger
                                     onClick={() => setDeleteIds(projects.map((project) => project.id))}
                                 >
                                     {t("canvas.deleteAll")}
@@ -140,7 +142,7 @@ export default function CanvasPage() {
                                 <Button
                                     disabled={!hydrated}
                                     icon={<Check className="size-4" />}
-                                    className="!border-emerald-800 !bg-emerald-800 !text-white hover:!border-emerald-950 hover:!bg-emerald-950 disabled:!border-emerald-800/40 disabled:!bg-emerald-800/40 disabled:!text-white"
+                                    type="primary"
                                     onClick={finishSelecting}
                                 >
                                     {t("canvas.finishSelect")}
@@ -171,13 +173,15 @@ export default function CanvasPage() {
                     </div>
                 </header>
 
+                <Input allowClear prefix={<Search size={16} />} value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索画布项目" aria-label="搜索画布项目" className="max-w-md" />
                 {!hydrated ? (
                     <section className="flex min-h-[360px] items-center justify-center border-y border-stone-200 text-sm text-stone-500 dark:border-stone-800">{t("canvas.loading")}</section>
                 ) : projects.length ? (
-                    <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,220px))] gap-4">
-                        {projects.map((project) => (
+                    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                        {visibleProjects.map((project) => (
                             <CanvasProjectCard key={project.id} project={project} selecting={selecting} />
                         ))}
+                        {!visibleProjects.length ? <Empty description="没有匹配的画布" className="col-span-full py-12" /> : null}
                     </div>
                 ) : (
                     <section className="flex min-h-[360px] flex-col items-center justify-center border-y border-stone-200 text-center dark:border-stone-800">

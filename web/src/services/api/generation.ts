@@ -1,4 +1,4 @@
-import { apiGet, apiPost, idempotencyHeaders, newIdempotencyKey, type Paginated } from "./client";
+import { apiDelete, apiGet, apiPost, idempotencyHeaders, newIdempotencyKey, type Paginated } from "./client";
 import type { ModelCapability } from "./models";
 
 export type TaskStatus = "pending" | "running" | "succeeded" | "partial" | "failed" | "cancelled";
@@ -18,6 +18,7 @@ export type GenerationTask = {
     id: string;
     capability: ModelCapability;
     modelName: string;
+    model: string;
     status: TaskStatus;
     prompt: string;
     quantity: number;
@@ -68,12 +69,16 @@ export function fetchTask(id: string) {
     return apiGet<GenerationTask>(`/generations/${id}`);
 }
 
-export function fetchTasks(params: { page: number; pageSize: number }) {
+export function fetchTasks(params: { page: number; pageSize: number; capability?: ModelCapability; status?: "active" }) {
     return apiGet<Paginated<GenerationTask>>("/generations", { params });
 }
 
 export function cancelTask(id: string) {
     return apiPost<GenerationTask>(`/generations/${id}/cancel`);
+}
+
+export function deleteTask(id: string) {
+    return apiDelete<{ id: string }>(`/generations/${id}`);
 }
 
 export function isTerminal(status: TaskStatus) {

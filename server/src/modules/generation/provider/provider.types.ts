@@ -9,6 +9,7 @@ export type ReferenceInput = {
     body: Buffer;
     /** Public http(s) URL Seedream can fetch. Empty-body passthrough refs only carry this. */
     publicUrl?: string;
+    role?: "first_frame" | "last_frame" | "reference_image" | "reference_video" | "reference_audio";
 };
 
 export type GenerationRequest = {
@@ -31,6 +32,9 @@ export type GenerationRequest = {
     resolution?: string;
     generateAudio?: boolean;
     watermark?: boolean;
+    seed?: number;
+    cameraFixed?: boolean;
+    webSearch?: boolean;
     voice?: string;
     audioFormat?: string;
     audioSpeed?: string;
@@ -61,7 +65,7 @@ export type GenerationOutput = {
     /** Upstream completion tokens, used to settle Seedance against the per-second freeze. */
     usageTokens?: number;
     /** Split token usage for `per_token` models, taken from the upstream's own accounting. */
-    usage?: { inputTokens: number; outputTokens: number };
+    usage?: import("../../pricing/token-pricing").TokenUsage;
     providerTaskId?: string;
 };
 

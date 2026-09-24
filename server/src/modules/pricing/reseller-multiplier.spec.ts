@@ -25,12 +25,20 @@ describe("reseller multiplier", () => {
         expect(effectiveMultiplier({ status: "approved", multiplierOverride: null, tierMultiplier: null })).toBe(NEUTRAL_MULTIPLIER);
     });
 
-    it("charges public price to anyone who is not an approved reseller", () => {
-        for (const status of ["pending", "rejected", "suspended"]) {
+    it("does not apply discounts to suspended or missing accounts", () => {
+        for (const status of ["suspended", "unknown"]) {
             expect(effectiveMultiplier({ status, multiplierOverride: "-0.5", tierMultiplier: "-0.5" })).toBe(NEUTRAL_MULTIPLIER);
         }
         expect(effectiveMultiplier(null)).toBe(NEUTRAL_MULTIPLIER);
         expect(effectiveMultiplier(undefined)).toBe(NEUTRAL_MULTIPLIER);
+    });
+
+    it("retains approved pricing throughout a tier-upgrade review", () => {
+        for (const status of ["pending", "rejected", "approved"]) {
+            expect(effectiveMultiplier({ status, tierMultiplier: "-0.1" })).toBe("0.900000");
+            expect(effectiveMultiplier({ status, multiplierOverride: "-0.2" })).toBe("0.800000");
+            expect(effectiveMultiplier({ status })).toBe("1.000000");
+        }
     });
 
     it("treats a zero surcharge override as an explicit public price, not as absent", () => {

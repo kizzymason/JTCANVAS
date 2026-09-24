@@ -20,6 +20,9 @@ export const channels = pgTable(
         enabled: boolean("enabled").default(true).notNull(),
         /** Lower runs first when several channels serve the same model. */
         priority: integer("priority").default(100).notNull(),
+        /** Percentage above provider cost; only the WhatsToken repricing operation uses this. */
+        markupPercent: moneyColumn("markup_percent").default("30").notNull(),
+        catalogueRevision: integer("catalogue_revision").default(0).notNull(),
         createdAt: createdAt(),
         updatedAt: updatedAt(),
     },

@@ -19,8 +19,9 @@ import { WalletService } from "../wallet/wallet.service";
 import { GENERATION_QUEUE, type GenerationJobData } from "./generation.queue";
 import { pricingSpec } from "./image-size";
 import { billedVideoResolution, isVideoMime, videoPricingSpec } from "./video-pricing-spec";
-import { seedanceSpecResolution, seedanceTokensFor, seedanceUsdPerMillion } from "./whatstoken-catalog";
+import { whatsTokenImagePixelSpec, seedanceSpecResolution, seedanceTokensFor } from "./whatstoken-catalog";
 import type { CreateGenerationDto } from "./dto/generation.dto";
+import { assertReferenceKind, decodeReferenceImage, mediaMime, mimeFromReferenceUrl } from "./reference-media";
 
 const ACTIVE_STATUSES = ["pending", "running"] as const;
 
@@ -86,7 +87,8 @@ export class GenerationService {
         assertGenerationEnabled(site, input.capability);
         const maxActive = opts?.maxActive && opts.maxActive > 0 ? opts.maxActive : this.maxActive;
         await this.assertCapacity(userId, undefined, maxActive);
-        const references = await this.resolveReferences(userId, input);
+        const resolvedReferences = await this.resolveReferences(userId, input);
+        const references = resolvedReferences.references;
 
         const publicModel = await this.pricing.resolvePublicModel(input.model);
         if (publicModel.capability !== input.capability) throw badRequest("CAPABILITY_MISMATCH", "所选模型与请求的生成类型不一致");
@@ -104,7 +106,7 @@ export class GenerationService {
         const billedResolution = input.capability === "video" ? billedVideoResolution(input.resolution, publicModel.modelName) : undefined;
         const spec =
             input.capability === "image"
-                ? pricingSpec(input.quality, input.size, publicModel.features.aspectPresets)
+                ? whatsTokenImagePixelSpec(publicModel.modelName, input.size) ?? pricingSpec(input.quality, input.size, publicModel.features.aspectPresets)
                 : input.capability === "video"
                   ? videoPricingSpec(input.resolution, references.some((item) => isVideoMime(item.mimeType)), publicModel.modelName)
                   : undefined;
@@ -128,9 +130,8 @@ export class GenerationService {
         const resolved = await this.pricing.resolveForExecution(input.model);
         const videoCount = Math.max(1, input.count ?? 1);
         const videoSeconds = input.seconds ?? 0;
-        const upstreamUsdPerM = input.capability === "video" ? seedanceUsdPerMillion(publicModel.modelName, spec) ?? "" : "";
         const estimatedTokens =
-            upstreamUsdPerM && videoSeconds >= 1
+            estimate.videoTokenPrice && videoSeconds >= 1
                 ? seedanceTokensFor(seedanceSpecResolution(spec ?? billedResolution), videoSeconds).times(videoCount).toFixed(0)
                 : "";
 
@@ -162,20 +163,25 @@ export class GenerationService {
                         resolution: billedResolution ?? input.resolution ?? "",
                         generateAudio: input.capability === "video" ? (input.generateAudio ?? true) : (input.generateAudio ?? false),
                         watermark: input.watermark ?? false,
+                        seed: input.seed,
+                        cameraFixed: input.cameraFixed,
+                        webSearch: input.webSearch,
                         voice: input.voice ?? "",
                         audioFormat: input.audioFormat ?? "",
                         audioSpeed: input.audioSpeed ?? "",
                         audioInstructions: input.audioInstructions ?? "",
                         reasoningEffort: input.reasoningEffort ?? "auto",
                         references: references.map((item) => item.storageKey),
-                        mask: input.mask ?? "",
+                        referenceMedia: references.map((item) => ({ mimeType: item.mimeType, role: item.role })),
+                        mask: resolvedReferences.mask ?? "",
                         spec: spec ?? "",
                         estimatedTokens,
-                        upstreamUsdPerM,
+                        upstreamUsdPerM: "",
+                        videoTokenPrice: estimate.videoTokenPrice,
                         // Snapshotted so a tier change mid-flight cannot corrupt the settlement.
                         billingMultiplier: estimate.multiplier,
                         billingMode: publicModel.billingMode,
-                        tokenPrices: publicModel.billingMode === "per_token" ? publicModel.tokenPrices : undefined,
+                        tokenPrices: estimate.tokenPrices,
                         inputTokens: inputTokens ?? 0,
                         maxOutputTokens: maxOutputTokens ?? 0,
                         apiKeyId: opts?.apiContext?.apiKeyId ?? "",
@@ -227,8 +233,12 @@ export class GenerationService {
         return response;
     }
 
-    async list(userId: string, query: { page: number; pageSize: number; capability?: GenerationTask["capability"] }) {
-        const where = query.capability ? and(eq(generationTasks.userId, userId), eq(generationTasks.capability, query.capability)) : eq(generationTasks.userId, userId);
+    async list(userId: string, query: { page: number; pageSize: number; capability?: GenerationTask["capability"]; status?: "active" }) {
+        const where = and(
+            eq(generationTasks.userId, userId),
+            query.capability ? eq(generationTasks.capability, query.capability) : undefined,
+            query.status === "active" ? inArray(generationTasks.status, ["pending", "running"]) : undefined,
+        );
         const [items, [counted]] = await Promise.all([
             this.db
                 .select()
@@ -287,6 +297,24 @@ export class GenerationService {
         return this.get(userId, taskId);
     }
 
+    async remove(userId: string, taskId: string) {
+        const [task] = await this.db
+            .select({ id: generationTasks.id, status: generationTasks.status })
+            .from(generationTasks)
+            .where(and(eq(generationTasks.id, taskId), eq(generationTasks.userId, userId)))
+            .limit(1);
+        if (!task) throw notFound("生成任务不存在");
+        if (ACTIVE_STATUSES.includes(task.status as (typeof ACTIVE_STATUSES)[number])) {
+            throw badRequest("TASK_ACTIVE", "进行中的任务不能删除，请先等待完成或取消");
+        }
+        const [removed] = await this.db
+            .delete(generationTasks)
+            .where(and(eq(generationTasks.id, taskId), eq(generationTasks.userId, userId)))
+            .returning({ id: generationTasks.id });
+        if (!removed) throw notFound("生成任务不存在");
+        return removed;
+    }
+
     /**
      * Keeps one user from occupying every worker slot. Called twice: once before the expensive pricing
      * work for a fast rejection, and once inside the transaction under the wallet lock, which is the
@@ -301,17 +329,29 @@ export class GenerationService {
     }
 
     private async resolveReferences(userId: string, input: CreateGenerationDto) {
-        const keys = [...(input.references ?? []), ...(input.mask ? [input.mask] : [])];
-        if (!keys.length) return [];
+        const media = input.referenceMedia ?? [];
+        const refs = [...(input.references ?? []), ...media.map((item) => item.url)];
+        const keys = [...refs, ...(input.mask ? [input.mask] : [])];
+        if (!keys.length) return { references: [], mask: undefined };
         const resolved = await Promise.all(
-            keys.map(async (key) => {
-                if (isPublicHttpUrl(key)) return { storageKey: key, mimeType: mimeFromUrl(key) };
-                return this.storage.findByStorageKey(userId, key);
+            keys.map(async (key, index) => {
+                const typed = media[index - (input.references?.length ?? 0)];
+                if (isPublicHttpUrl(key)) {
+                    const mimeType = typed ? mediaMime[typed.type] : mimeFromReferenceUrl(key);
+                    assertReferenceKind(mimeType, typed);
+                    return { storageKey: key, mimeType };
+                }
+                const file = key.startsWith("data:")
+                    ? await this.storage.save({ ownerId: userId, ...decodeReferenceImage(key), prefix: "image" })
+                    : await this.storage.findByStorageKey(userId, key);
+                if (file) assertReferenceKind(file.mimeType, typed);
+                return file;
             }),
         );
         const missing = keys.filter((_key, index) => !resolved[index]);
-        if (missing.length) throw badRequest("REFERENCE_NOT_FOUND", `参考图不存在或不属于当前账号：${missing.join(", ")}`);
-        return (input.references ?? []).map((key, index) => ({ storageKey: key, mimeType: resolved[index]?.mimeType ?? "" }));
+        if (missing.length) throw badRequest("REFERENCE_NOT_FOUND", "参考素材不存在或不属于当前账号");
+        return { references: refs.map((_key, index) => ({ storageKey: resolved[index]!.storageKey, mimeType: resolved[index]!.mimeType,
+            role: media[index - (input.references?.length ?? 0)]?.role })), mask: input.mask ? resolved[refs.length]!.storageKey : undefined };
     }
 
     toResponse(task: GenerationTask) {
@@ -319,6 +359,7 @@ export class GenerationService {
             id: task.id,
             capability: task.capability,
             modelName: task.modelName,
+            model: task.channelId ? `${task.channelId}::${task.modelName}` : "",
             status: task.status,
             prompt: task.prompt,
             quantity: task.quantity,
@@ -335,10 +376,3 @@ export class GenerationService {
     }
 }
 
-function mimeFromUrl(url: string) {
-    const pathname = url.split("?")[0]?.toLowerCase() ?? "";
-    if (pathname.endsWith(".jpg") || pathname.endsWith(".jpeg")) return "image/jpeg";
-    if (pathname.endsWith(".webp")) return "image/webp";
-    if (pathname.endsWith(".mp4") || pathname.endsWith(".webm")) return "video/mp4";
-    return "image/png";
-}

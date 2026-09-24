@@ -1,3 +1,4 @@
+import { RepriceChannelDto } from "./dto/admin.dto";
 import { Body, Controller, Delete, Get, Header, Param, Patch, Post, Query, Res } from "@nestjs/common";
 import { ApiExcludeEndpoint, ApiOperation, ApiTags } from "@nestjs/swagger";
 import type { FastifyReply } from "fastify";
@@ -102,6 +103,13 @@ export class AdminController {
     @ApiOperation({ summary: "修改渠道，apiKey 留空表示不改" })
     updateChannel(@Param("id") id: string, @Body() body: UpsertChannelDto) {
         return this.admin.updateChannel(id, body);
+    }
+
+    @Post("channels/:id/reprice")
+    @Audit({ action: "channel.reprice", targetType: "channel" })
+    @ApiOperation({ summary: "按成本与加价幅度重新计算 WhatsToken 渠道全部已知模型价格" })
+    repriceChannel(@Param("id") id: string, @Body() body: RepriceChannelDto) {
+        return this.admin.repriceChannel(id, body.markupPercent);
     }
 
     @Delete("channels/:id")

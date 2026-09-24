@@ -103,10 +103,27 @@ describe("ApiKeyGuard", () => {
         await expect(guard.canActivate(contextFor(allowed))).resolves.toBe(true);
     });
 
-    it("rejects a key whose reseller standing is not approved", async () => {
-        for (const status of ["pending", "rejected", "suspended", null]) {
-            const guard = guardFor(resolved({ resellerStatus: status }));
-            expect(await envelopeOf(guard.canActivate(contextFor(request())))).toMatchObject({ type: "permission_denied", code: "reseller_not_approved" });
+    it("permits basic accounts and keeps access during or after review", async () => {
+        for (const status of ["approved", "pending", "rejected", null]) {
+            const guard = guardFor(resolved({ resellerStatus: status, tierMultiplier: null }), { role: "user" });
+            const req = request();
+            await expect(guard.canActivate(contextFor(req))).resolves.toBe(true);
+            expect(req.apiCaller?.multiplier).toBe("1.000000");
+        }
+    });
+
+    it("keeps existing discounts during review and after rejection", async () => {
+        for (const status of ["pending", "rejected"]) {
+            const req = request();
+            await guardFor(resolved({ resellerStatus: status, tierMultiplier: "-0.1" })).canActivate(contextFor(req));
+            expect(req.apiCaller?.multiplier).toBe("0.900000");
+        }
+    });
+
+    it("rejects suspended open-platform access, including an admin's key", async () => {
+        for (const role of ["user", "reseller", "admin"]) {
+            const guard = guardFor(resolved({ resellerStatus: "suspended" }), { role });
+            expect(await envelopeOf(guard.canActivate(contextFor(request())))).toMatchObject({ code: "reseller_suspended" });
         }
     });
 
@@ -126,6 +143,13 @@ describe("ApiKeyGuard", () => {
     it("rejects a key that has spent its configured cap", async () => {
         const guard = guardFor(resolved({ quotaLimit: "10.000000", quotaUsed: "10.000000" }));
         expect(await envelopeOf(guard.canActivate(contextFor(request())))).toMatchObject({ type: "insufficient_quota", code: "api_key_quota_exhausted" });
+    });
+
+    it("allows polling and downloads at the quota ceiling but still rejects new paid submissions", async () => {
+        const guard = guardFor(resolved({ quotaLimit: "10.000000", quotaUsed: "10.000000" }));
+        const req = { ...request(), method: "GET" };
+        await expect(guard.canActivate(contextFor(req))).resolves.toBe(true);
+        expect(await envelopeOf(guard.canActivate(contextFor({ ...req, method: "POST" })))).toMatchObject({ code: "api_key_quota_exhausted" });
     });
 
     it("still allows a key below its cap", async () => {

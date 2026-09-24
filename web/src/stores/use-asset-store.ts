@@ -82,7 +82,7 @@ function toAsset(record: AssetRecord): Asset {
         kind: record.kind,
         title: record.title,
         // Thumbnails keep the library grid light; the original is only fetched on preview.
-        coverUrl: storageKey ? fileUrl(storageKey, "thumb") : "",
+        coverUrl: storageKey && record.kind === "image" ? fileUrl(storageKey, "thumb") : "",
         tags: record.tags ?? [],
         source: record.source,
         note: record.note,

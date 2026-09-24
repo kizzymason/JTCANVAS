@@ -18,6 +18,8 @@ export type GenerationSettlementInput = {
     estimatedTokens?: number;
     /** Published $/1M for this Seedance spec; used with usageTokens to settle. */
     upstreamUsdPerM?: string;
+    videoTokenPrice?: string;
+    tokenTimeMultiplier?: string;
     /**
      * Reseller coefficient snapshotted at submit time. Required wherever settlement derives an
      * absolute CNY figure from a public price list, because those figures are quoted at list price and
@@ -107,7 +109,7 @@ function proRate(estimatedCost: string, requested: number, billed: number) {
  */
 function tokenActualCost(input: GenerationSettlementInput) {
     if (!input.usage || !input.tokenPrices) return toMoneyString(input.estimatedCost);
-    const raw = ceilMoney(applyMultiplier(tokenUsageCost(input.usage, input.tokenPrices), input.billingMultiplier));
+    const raw = ceilMoney(applyMultiplier(tokenUsageCost(input.usage, input.tokenPrices).times(input.tokenTimeMultiplier ?? "1"), input.billingMultiplier));
     return raw.lt(input.estimatedCost) ? toMoneyString(raw) : toMoneyString(input.estimatedCost);
 }
 
@@ -122,6 +124,7 @@ function videoActualCost(input: GenerationSettlementInput, requested: number, bi
 function seedanceTokenSell(input: GenerationSettlementInput) {
     const usageTokens = asTokenCount(input.usageTokens);
     if (!usageTokens) return undefined;
+    if (input.videoTokenPrice) return toMoneyString(ceilMoney(applyMultiplier(money(usageTokens).div(1_000_000).times(input.videoTokenPrice), input.billingMultiplier)));
     const usdPerM = (input.upstreamUsdPerM ?? "").trim();
     // The catalogue quotes list price, so the reseller coefficient has to be re-applied here.
     if (usdPerM) return toMoneyString(ceilMoney(applyMultiplier(seedanceSellCnyFromTokens(usdPerM, usageTokens), input.billingMultiplier)));

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { Inject, Injectable } from "@nestjs/common";
 import { and, asc, eq } from "drizzle-orm";
 import Redis from "ioredis";
@@ -5,7 +6,7 @@ import { DB, type Database } from "../../db/db.module";
 import { channelModels, channels, modelPrices } from "../../db/schema";
 import { badRequest, noUsableChannel } from "../../common/errors";
 import { ceilMoney, money, mulMoney, toMoneyString } from "../../common/money";
-import { seedanceCatalogSellCny } from "../generation/whatstoken-catalog";
+import { isWhatsTokenChannel, WHATSTOKEN_TEXT_MODELS, seedanceTokensFor, seedanceSpecResolution } from "../generation/whatstoken-catalog";
 import { REDIS } from "../../redis/redis.module";
 import { parseModelFeatures } from "./model-features";
 import {
@@ -20,10 +21,11 @@ import {
     type PublicModel,
 } from "./pricing.types";
 import { NEUTRAL_MULTIPLIER, applyMultiplier } from "./reseller-multiplier";
-import { tokenBucketCost } from "./token-pricing";
+import { tokenFreezeCost } from "./token-pricing";
 
-const CACHE_KEY = "pricing:models:v2";
+const CACHE_KEY = "pricing:models:v3";
 const CACHE_TTL_SECONDS = 600;
+const CACHE_VERSION_KEY = `${CACHE_KEY}:version`;
 
 /**
  * Resolves prices and produces estimates. The public model table is cached in Redis because the
@@ -39,12 +41,15 @@ export class PricingService {
 
     /** Enabled models across enabled channels, with prices attached. Safe to expose to any user. */
     async listPublicModels(): Promise<PublicModel[]> {
-        const cached = await this.redis.get(CACHE_KEY);
+        // A reader started before repricing may populate only its old generation of the cache.
+        const cacheKey = `${CACHE_KEY}:${await this.redis.get(CACHE_VERSION_KEY) ?? "0"}`;
+        const cached = await this.redis.get(cacheKey);
         if (cached) return JSON.parse(cached) as PublicModel[];
 
         const rows = await this.db
             .select({
                 channelId: channels.id,
+                baseUrl: channels.baseUrl,
                 apiFormat: channels.apiFormat,
                 priority: channels.priority,
                 modelId: channelModels.id,
@@ -74,10 +79,17 @@ export class PricingService {
             const base = list.find((item) => item.spec === null) ?? list[0];
             const specPrices: Record<string, string> = {};
             for (const item of list) if (item.spec) specPrices[item.spec] = item.unitPrice;
-            const tokenPrices = {
-                input: specPrices[TOKEN_SPEC_INPUT] ?? "0",
-                output: specPrices[TOKEN_SPEC_OUTPUT] ?? "0",
+            const catalog = isWhatsTokenChannel(row) ? WHATSTOKEN_TEXT_MODELS.find((model) => model.name === row.modelName) : undefined;
+            const bucket = (suffix = "") => ({
+                input: specPrices[`${TOKEN_SPEC_INPUT}${suffix}`] ?? specPrices[TOKEN_SPEC_INPUT] ?? "0",
+                output: specPrices[`${TOKEN_SPEC_OUTPUT}${suffix}`] ?? specPrices[TOKEN_SPEC_OUTPUT] ?? "0",
+                cacheRead: specPrices[`cache_read${suffix}`], cacheWrite: specPrices[`cache_write${suffix}`],
+            });
+            const tokenPrices = { ...bucket(),
+                ...(catalog?.tiers ? { tiers: catalog.tiers.map((tier) => ({ maxInputTokens: tier.maxInputTokens, ...bucket(`:${tier.maxInputTokens}`) })) } : {}),
+                ...(catalog?.peakHours ? { peakHours: true } : {}),
             };
+            const videoTokenPrices = isWhatsTokenChannel(row) ? Object.fromEntries(Object.entries(specPrices).filter(([spec]) => spec.startsWith("tokens:")).map(([spec, price]) => [spec.slice(7), price])) : undefined;
 
             models.push({
                 value: encodeModelValue(row.channelId, row.modelName),
@@ -93,11 +105,12 @@ export class PricingService {
                 minCharge: base.minCharge,
                 specPrices,
                 tokenPrices,
+                videoTokenPrices,
                 features: parseModelFeatures(row.features),
             });
         }
 
-        await this.redis.set(CACHE_KEY, JSON.stringify(models), "EX", CACHE_TTL_SECONDS);
+        await this.redis.set(cacheKey, JSON.stringify(models), "EX", CACHE_TTL_SECONDS);
         return models;
     }
 
@@ -107,7 +120,8 @@ export class PricingService {
     }
 
     /** Called after any admin mutation to channels, models or prices. */
-    invalidate() {
+    async invalidate() {
+        await this.redis.set(CACHE_VERSION_KEY, randomUUID());
         return this.redis.del(CACHE_KEY);
     }
 
@@ -130,12 +144,11 @@ export class PricingService {
         const referenceSurcharge = mulMoney(price.extraReferencePrice, Math.max(0, (request.referenceCount ?? 0) - 1));
         const raw = mulMoney(price.unitPrice, quantity).plus(referenceSurcharge);
         let amount = ceilMoney(applyMultiplier(raw.lessThan(price.minCharge) ? price.minCharge : raw, multiplier));
-        if (model.billingMode === "per_second") {
-            const catalogSell = seedanceCatalogSellCny(model.modelName, request.spec, request.seconds ?? 0, request.count ?? 1);
-            if (catalogSell) {
-                const scaled = ceilMoney(applyMultiplier(catalogSell, multiplier));
-                if (scaled.gt(amount)) amount = scaled;
-            }
+        const videoTokenPrice = model.videoTokenPrices?.[request.spec ?? "720"];
+        if (model.billingMode === "per_second" && videoTokenPrice) {
+            const tokens = seedanceTokensFor(seedanceSpecResolution(request.spec), request.seconds ?? 0).times(request.count ?? 1);
+            const encoded = tokens.div(1_000_000).times(videoTokenPrice).plus(referenceSurcharge);
+            amount = ceilMoney(applyMultiplier(encoded.lessThan(price.minCharge) ? price.minCharge : encoded, multiplier));
         }
 
         return {
@@ -143,6 +156,7 @@ export class PricingService {
             billingMode: model.billingMode,
             unitPrice: toMoneyString(applyMultiplier(price.unitPrice, multiplier)),
             quantity,
+            videoTokenPrice,
             amount: toMoneyString(amount),
             multiplier,
         };
@@ -158,7 +172,7 @@ export class PricingService {
         const maxOutputTokens = Math.max(0, Math.floor(request.maxOutputTokens ?? 0));
         if (inputTokens + maxOutputTokens < 1) throw badRequest("TOKENS_REQUIRED", "按 token 计费的模型需要提供输入与输出上限");
 
-        const raw = tokenBucketCost(inputTokens, model.tokenPrices.input).plus(tokenBucketCost(maxOutputTokens, model.tokenPrices.output));
+        const raw = tokenFreezeCost(inputTokens, maxOutputTokens, model.tokenPrices);
         const floored = raw.lessThan(model.minCharge) ? money(model.minCharge) : raw;
 
         return {
@@ -170,6 +184,7 @@ export class PricingService {
             multiplier,
             inputTokens,
             maxOutputTokens,
+            tokenPrices: model.tokenPrices,
         };
     }
 

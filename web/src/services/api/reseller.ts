@@ -6,17 +6,14 @@ export type ResellerApplicationStatus = "none" | "pending" | "approved" | "rejec
 
 export type ResellerProfileForm = {
     companyName: string;
-    contactName: string;
-    contactPhone: string;
     contactEmail: string;
     website: string;
     useCase: string;
-    expectedVolume: string;
 };
 
 export type ResellerStatus = {
     status: ResellerApplicationStatus;
-    /** Console access. Admins qualify without an application of their own. */
+    /** Console access is available to any enrolled account unless suspended. */
     canUseConsole: boolean;
     tierName: string | null;
     /** Signed surcharge as the admin configured it, e.g. "-0.100000". */
@@ -96,7 +93,7 @@ export type ResellerModel = {
     minCharge: string;
     extraReferencePrice: string;
     specPrices: Record<string, string>;
-    tokenPrices: { input: string; output: string };
+    tokenPrices: NonNullable<import("./models").PublicModel["tokenPrices"]>;
     features: ModelFeatures;
 };
 

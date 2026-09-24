@@ -1,12 +1,11 @@
-import { Body, Controller, Get, Inject, Param, Post, Query, Res } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Inject, Param, Post, Query, Res } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
 import type { FastifyReply } from "fastify";
 import Redis from "ioredis";
 import { CurrentUser, Idempotent } from "../../common/decorators";
 import { REDIS_SUBSCRIBER } from "../../redis/redis.module";
 import type { AuthUser } from "../../common/types";
-import { PaginationDto } from "../wallet/dto/wallet.dto";
-import { CreateGenerationDto } from "./dto/generation.dto";
+import { CreateGenerationDto, GenerationQueryDto } from "./dto/generation.dto";
 import { GenerationService } from "./generation.service";
 import { statusChannel, streamChannel } from "./generation.queue";
 
@@ -28,7 +27,7 @@ export class GenerationController {
 
     @Get()
     @ApiOperation({ summary: "生成记录" })
-    list(@CurrentUser() user: AuthUser, @Query() query: PaginationDto) {
+    list(@CurrentUser() user: AuthUser, @Query() query: GenerationQueryDto) {
         return this.generation.list(user.id, query);
     }
 
@@ -42,6 +41,12 @@ export class GenerationController {
     @ApiOperation({ summary: "取消尚未开始的任务并释放冻结" })
     cancel(@CurrentUser() user: AuthUser, @Param("id") id: string) {
         return this.generation.cancel(user.id, id);
+    }
+
+    @Delete(":id")
+    @ApiOperation({ summary: "删除已结束的生成记录" })
+    remove(@CurrentUser() user: AuthUser, @Param("id") id: string) {
+        return this.generation.remove(user.id, id);
     }
 
     /**

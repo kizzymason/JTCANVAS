@@ -6,7 +6,6 @@ description: Planned follow-up work
 # TODO
 
 - PiAPI pool follow-up: balances are calibrated on import, manual refresh and after each successful generation, with no scheduled sweep. Larger pools may need a concurrency cap and a refresh schedule.
-- Workbench history is still a browser-local cache: the authoritative record lives server-side (My wallet usage history and the admin generations page), but the history list in the image and video studios still reads localforage, so it does not follow the user across devices.
 - Storage migration tooling: the admin area can switch between local disk and S3, but the switch only affects new files. Existing files are not moved and need a background migration job.
 - Canvas collaboration: conflicts are handled with a `version` optimistic lock that asks the user to reload. Simultaneous editing of one canvas from several devices deserves incremental patches or field-level merging.
 - Local Agent follow-up: upgrade the Claude Code CLI adapter to the Claude Agent SDK adapter per the integration plan and improve the tool queue.
@@ -15,4 +14,4 @@ description: Planned follow-up work
 - Local Agent and server-side billing: the agent's generation tools now go through the billed server API. The protocol version needs to move from 6 to 7 and the panel should surface insufficient balance.
 - Agent Skills follow-up: add installation from web search, Skill resource-file management and controlled local-memory persistence.
 - Canvas plugins are still dynamically imported from arbitrary remote URLs. For a commercial deployment this should be restricted to an admin-registered allowlist.
-- Open Platform follow-up: `/v1/audio/speech`, downstream webhooks (`callback_url` is accepted but ignored), reseller sub-accounts with revenue split, and non-CNY settlement are all out of the first release.
+- Open Platform follow-up: `/v1/audio/speech`, downstream webhooks (`callback_url` is currently rejected), reseller sub-accounts with revenue split, and non-CNY settlement are all out of the first release.

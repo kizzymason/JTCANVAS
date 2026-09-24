@@ -11,6 +11,7 @@ export function normalizeVideoPricingResolution(resolution: string | undefined) 
     if (!raw || raw === "auto" || raw === "high" || raw === "medium") return "720";
     if (raw === "low") return "480";
     if (raw.toLowerCase() === "4k") return "2160";
+    if (raw.toLowerCase() === "2k") return "1440";
     return raw;
 }
 

@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { Type } from "class-transformer";
 import { IsArray, IsBoolean, IsIn, IsInt, IsNumber, IsObject, IsOptional, IsString, Max, MaxLength, Min, ValidateNested } from "class-validator";
+import { IsMediaInput, IsVideoContent } from "../media-input";
 
 /**
  * Request shapes for the downstream API. They mirror the OpenAI reference exactly where it exists;
@@ -35,7 +36,7 @@ export class ImageGenerationDto {
 
     @ApiPropertyOptional({ enum: ["auto", "low", "medium", "high"] })
     @IsOptional()
-    @IsIn(["auto", "low", "medium", "high", "standard", "hd"])
+    @IsIn(["auto", "low", "medium", "high", "standard", "hd", "1K", "2K", "4K", "1k", "2k", "4k"])
     quality?: string;
 
     @ApiPropertyOptional({ enum: ["auto", "transparent", "opaque"] })
@@ -51,9 +52,41 @@ export class ImageGenerationDto {
     /** Extension: public https URLs used as reference images. */
     @ApiPropertyOptional({ description: "参考图公网 https 地址", type: [String] })
     @IsOptional()
+    @IsMediaInput("image")
+    image?: string | string[];
+
+    @IsOptional()
     @IsArray()
-    @IsString({ each: true })
-    image?: string[];
+    @IsMediaInput("image")
+    image_urls?: string[];
+
+    @IsOptional()
+    @IsString()
+    @IsMediaInput("image")
+    mask?: string;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(32)
+    resolution?: string;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(32)
+    ratio?: string;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(32)
+    aspect_ratio?: string;
+
+    @IsOptional()
+    @IsBoolean()
+    watermark?: boolean;
+
+    @IsOptional()
+    @IsBoolean()
+    web_search?: boolean;
 
     @ApiPropertyOptional({ description: "调用方自定义标识，仅回显" })
     @IsOptional()
@@ -62,27 +95,12 @@ export class ImageGenerationDto {
     user?: string;
 }
 
-export class VideoInputReferenceDto {
-    @ApiPropertyOptional()
+/** Options accepted both at the top level and in New API's metadata object. */
+export class VideoOptionsDto {
     @IsOptional()
-    @IsString()
-    @MaxLength(2048)
-    image_url?: string;
-}
+    @IsVideoContent()
+    content?: unknown[];
 
-export class VideoCreateDto {
-    @ApiProperty({ example: "seedance-1-0-pro-250528" })
-    @IsString()
-    @MaxLength(256)
-    model!: string;
-
-    @ApiProperty()
-    @IsString()
-    @MaxLength(20_000)
-    prompt!: string;
-
-    /** OpenAI sends this as a string ("4"); numbers are accepted too. */
-    @ApiPropertyOptional({ description: "时长（秒）", example: "5" })
     @IsOptional()
     @Type(() => Number)
     @IsInt()
@@ -90,32 +108,108 @@ export class VideoCreateDto {
     @Max(600)
     seconds?: number;
 
-    @ApiPropertyOptional({ description: "1280x720 等" })
+    @IsOptional()
+    @Type(() => Number)
+    @IsInt()
+    @Min(1)
+    @Max(600)
+    duration?: number;
+
     @IsOptional()
     @IsString()
     @MaxLength(32)
     size?: string;
 
-    /** Extension: the resolution tier directly, avoiding a size-to-tier guess. */
-    @ApiPropertyOptional({ description: "480 / 720 / 1080" })
     @IsOptional()
     @IsString()
-    @MaxLength(16)
+    @MaxLength(32)
     resolution?: string;
 
-    @ApiPropertyOptional({ type: VideoInputReferenceDto })
     @IsOptional()
-    @IsObject()
-    @ValidateNested()
-    @Type(() => VideoInputReferenceDto)
-    input_reference?: VideoInputReferenceDto;
+    @IsString()
+    @MaxLength(32)
+    ratio?: string;
 
-    @ApiPropertyOptional({ description: "是否生成配音" })
+    @IsOptional()
+    @IsString()
+    @MaxLength(32)
+    aspect_ratio?: string;
+
+    @IsOptional()
+    @IsMediaInput()
+    input_reference?: unknown;
+
+    @IsOptional()
+    @IsMediaInput("image")
+    image?: unknown;
+
+    @IsOptional()
+    @IsArray()
+    @IsMediaInput("image")
+    images?: unknown[];
+
+    @IsOptional()
+    @IsArray()
+    @IsMediaInput("image")
+    image_urls?: unknown[];
+
+    @IsOptional()
+    @IsArray()
+    @IsMediaInput("image")
+    reference_images?: unknown[];
+
+    @IsOptional()
+    @IsArray()
+    @IsMediaInput("video")
+    videos?: unknown[];
+
+    @IsOptional()
+    @IsArray()
+    @IsMediaInput("video")
+    reference_videos?: unknown[];
+
+    @IsOptional()
+    @IsArray()
+    @IsMediaInput("audio")
+    audios?: unknown[];
+
+    @IsOptional()
+    @IsArray()
+    @IsMediaInput("audio")
+    reference_audios?: unknown[];
+
     @IsOptional()
     @IsBoolean()
     generate_audio?: boolean;
 
-    @ApiPropertyOptional({ description: "生成条数", default: 1, maximum: 4 })
+    @IsOptional()
+    @IsBoolean()
+    watermark?: boolean;
+
+    @IsOptional()
+    @IsInt()
+    seed?: number;
+
+    @IsOptional()
+    @IsBoolean()
+    camera_fixed?: boolean;
+
+    @IsOptional()
+    @IsBoolean()
+    web_search?: boolean;
+}
+
+export class VideoCreateDto extends VideoOptionsDto {
+    @ApiProperty({ example: "seedance-2-0-fast-NSFW" })
+    @IsString()
+    @MaxLength(256)
+    model!: string;
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(20_000)
+    prompt?: string;
+
     @IsOptional()
     @Type(() => Number)
     @IsInt()
@@ -123,7 +217,12 @@ export class VideoCreateDto {
     @Max(4)
     n?: number;
 
-    @ApiPropertyOptional()
+    @IsOptional()
+    @IsObject()
+    @ValidateNested()
+    @Type(() => VideoOptionsDto)
+    metadata?: VideoOptionsDto;
+
     @IsOptional()
     @IsString()
     @MaxLength(256)

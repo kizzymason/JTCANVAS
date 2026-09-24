@@ -9,6 +9,7 @@ import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { Logger } from "nestjs-pino";
 import { AppModule } from "./app.module";
 import { OpenApiService } from "./modules/admin/openapi.service";
+import { parseOpenApiMultipart } from "./modules/openapi/multipart-body";
 
 async function bootstrap() {
     const app = await NestFactory.create<NestFastifyApplication>(
@@ -26,6 +27,7 @@ async function bootstrap() {
 
     await app.register(fastifyCookie);
     await app.register(fastifyMultipart, { limits: { fileSize: 50 * 1024 * 1024, files: 10 } });
+    app.getHttpAdapter().getInstance().addHook("preValidation", parseOpenApiMultipart);
 
     app.setGlobalPrefix(config.get<string>("apiPrefix")!);
     app.useGlobalPipes(

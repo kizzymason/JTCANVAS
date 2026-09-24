@@ -1,8 +1,8 @@
-import { App, Alert, Button, DatePicker, Drawer, Form, Input, InputNumber, Popconfirm, Select, Space, Table, Tag, Tooltip, Typography } from "antd";
+import { App, Alert, Button, DatePicker, Drawer, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Table, Tag, Tooltip, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
-import { BookOpen, KeyRound, Plus, RotateCcw, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { BookOpen, Copy, KeyRound, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
@@ -10,6 +10,8 @@ import { ApiError } from "@/services/api/client";
 import { formatMoney } from "@/services/api/models";
 import { apiBaseUrl, resellerApi, type ApiToken, type CreateApiTokenInput, type ResellerModel } from "@/services/api/reseller";
 import { useAdminTable } from "@/pages/admin/use-admin-table";
+import { useCopyText } from "@/hooks/use-copy-text";
+import { buildAgentIntegrationPrompt } from "../agent-prompt";
 
 type TokenForm = {
     name: string;
@@ -37,6 +39,25 @@ export default function OpenConsoleTokensPage() {
     const [creating, setCreating] = useState(false);
     const [models, setModels] = useState<ResellerModel[]>([]);
     const baseUrl = apiBaseUrl();
+    const copyText = useCopyText();
+    const createdSecrets = useRef(new Map<string, string>());
+    const [promptToken, setPromptToken] = useState<ApiToken | null>(null);
+    const [promptSecret, setPromptSecret] = useState("");
+
+    const copyIntegration = (token: ApiToken) => {
+        const secret = createdSecrets.current.get(token.id);
+        if (secret) copyText(buildAgentIntegrationPrompt(baseUrl, secret, token.modelScope), "接入提示词已复制，包含此令牌密钥和 API 地址");
+        else { setPromptSecret(""); setPromptToken(token); }
+    };
+    const closePrompt = () => { setPromptToken(null); setPromptSecret(""); };
+    const copyExisting = async () => {
+        const secret = promptSecret.trim();
+        if (!promptToken || !/^sk-jt-[A-Za-z0-9_-]{43}$/.test(secret) || !secret.startsWith(promptToken.keyPrefix) || !secret.endsWith(promptToken.keyTail)) {
+            message.error("请填写与所选令牌前后缀一致的完整密钥");
+            return;
+        }
+        if (await copyText(buildAgentIntegrationPrompt(baseUrl, secret, promptToken.modelScope), "接入提示词已复制，包含密钥和 API 地址")) closePrompt();
+    };
 
     const table = useAdminTable<ApiToken>(useCallback((params) => resellerApi.tokens(params), []));
 
@@ -72,6 +93,7 @@ export default function OpenConsoleTokensPage() {
     const remove = async (token: ApiToken) => {
         try {
             await resellerApi.removeToken(token.id);
+            createdSecrets.current.delete(token.id);
             message.success(t("openPlatform.tokens.removed"));
             await table.reload();
         } catch (error) {
@@ -145,9 +167,10 @@ export default function OpenConsoleTokensPage() {
         },
         {
             title: t("openPlatform.tokens.actions"),
-            width: 230,
+            width: 350,
             render: (_value, token) => (
                 <Space size={0} wrap>
+                    <Button size="small" type="text" icon={<Copy className="size-3.5" />} disabled={token.status !== "active" || Boolean(token.expiresAt && dayjs(token.expiresAt).isBefore(dayjs()))} onClick={() => copyIntegration(token)}>一键接入提示词</Button>
                     <Button size="small" type="text" onClick={() => setEditing(token)}>
                         {t("openPlatform.tokens.edit")}
                     </Button>
@@ -200,18 +223,25 @@ export default function OpenConsoleTokensPage() {
 
             <Table rowKey="id" size="small" scroll={{ x: 1280 }} loading={table.loading} dataSource={table.items} columns={columns} pagination={table.pagination} />
 
-            <TokenDrawer open={creating} token={null} modelOptions={modelOptions} onClose={() => setCreating(false)} onSaved={() => void table.reload()} />
+            <Modal open={Boolean(promptToken)} title="复制 Agent 接入提示词" onCancel={closePrompt} onOk={copyExisting} okText="复制含密钥的提示词" destroyOnHidden>
+                <p className="mb-3 text-sm text-muted-foreground">历史令牌无法再次读取密钥，请填写创建时保存的完整密钥。仅用于本次复制，不会保存或替换您的令牌。</p>
+                <p className="mb-2 text-sm">令牌：{promptToken?.name}（{promptToken?.keyPrefix}…{promptToken?.keyTail}）</p>
+                <Input.Password aria-label="完整 API 密钥" autoComplete="off" value={promptSecret} onChange={(event) => setPromptSecret(event.target.value)} onPressEnter={copyExisting} placeholder="粘贴此令牌的完整密钥" />
+                <p className="mt-2 text-xs text-muted-foreground">提示词包含访问凭据，请仅交给您信任的 AI 或 Agent。</p>
+            </Modal>
+            <TokenDrawer open={creating} token={null} modelOptions={modelOptions} onClose={() => setCreating(false)} onSaved={() => void table.reload()} onCreated={(token, secret) => createdSecrets.current.set(token.id, secret)} />
             <TokenDrawer open={Boolean(editing)} token={editing} modelOptions={modelOptions} onClose={() => setEditing(null)} onSaved={() => void table.reload()} />
         </div>
     );
 }
 
-function TokenDrawer({ open, token, modelOptions, onClose, onSaved }: { open: boolean; token: ApiToken | null; modelOptions: Array<{ value: string; label: string }>; onClose: () => void; onSaved: () => void }) {
+function TokenDrawer({ open, token, modelOptions, onClose, onSaved, onCreated }: { open: boolean; token: ApiToken | null; modelOptions: Array<{ value: string; label: string }>; onClose: () => void; onSaved: () => void; onCreated?: (token: ApiToken, secret: string) => void }) {
     const { t } = useTranslation();
     const { message } = App.useApp();
     const [form] = Form.useForm<TokenForm>();
     const [saving, setSaving] = useState(false);
     const [plaintext, setPlaintext] = useState("");
+    const copyText = useCopyText();
 
     useEffect(() => {
         if (!open) return;
@@ -253,6 +283,7 @@ function TokenDrawer({ open, token, modelOptions, onClose, onSaved }: { open: bo
             } else {
                 const result = await resellerApi.createToken(payload);
                 setPlaintext(result.plaintext);
+                onCreated?.(result.key, result.plaintext);
                 onSaved();
             }
         } catch (error) {
@@ -294,6 +325,7 @@ function TokenDrawer({ open, token, modelOptions, onClose, onSaved }: { open: bo
                     <Typography.Paragraph copyable={{ text: plaintext }} className="!mb-0 break-all rounded border border-stone-200 bg-stone-50 p-3 font-mono text-xs dark:border-stone-700 dark:bg-stone-900">
                         {plaintext}
                     </Typography.Paragraph>
+                    <Button className="mt-3" icon={<Copy className="size-4" />} onClick={() => copyText(buildAgentIntegrationPrompt(apiBaseUrl(), plaintext, form.getFieldValue("modelScope") ?? []), "接入提示词已复制，包含密钥和 API 地址")}>复制 Agent 一键接入提示词</Button>
                 </>
             ) : (
                 <Form form={form} layout="vertical" requiredMark={false}>

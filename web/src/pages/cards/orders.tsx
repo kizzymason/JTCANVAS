@@ -65,7 +65,7 @@ export default function CardOrdersPage() {
     }, [email, message, t]);
 
     return (
-        <main className="h-full overflow-y-auto bg-background">
+        <main className="h-dvh overflow-y-auto bg-background text-foreground">
             <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-5 py-10 sm:px-6 sm:py-14">
                 <header className="flex flex-col gap-3">
                     <Link to="/cards" className="inline-flex w-fit items-center gap-1.5 text-sm text-stone-600 hover:text-stone-950 dark:text-stone-300 dark:hover:text-stone-100">
@@ -111,7 +111,7 @@ function OrderCard({ order, highlight }: { order: CardOrder; highlight?: boolean
     const { t } = useTranslation();
     const short = order.status === "paid" && order.deliveredCount < order.quantity;
     return (
-        <section className={`rounded-lg border p-4 ${highlight ? "border-stone-950 dark:border-stone-100" : "border-stone-200 dark:border-stone-800"}`}>
+        <section className={`rounded-lg border p-4 ${highlight ? "border-primary bg-card" : "border-border bg-card"}`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="min-w-0">
                     <div className="truncate font-medium text-stone-950 dark:text-stone-100">{order.productName}</div>

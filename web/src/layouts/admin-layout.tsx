@@ -49,6 +49,7 @@ const navGroups: Array<{ titleKey: string; items: AdminNavItem[] }> = [
     {
         titleKey: "admin.nav.groupPlatform",
         items: [
+            { key: "homepage", path: "/admin/homepage", icon: AppWindow, labelKey: "admin.nav.homepage" },
             { key: "announcements", path: "/admin/announcements", icon: Megaphone, labelKey: "admin.nav.announcements" },
             { key: "storage", path: "/admin/storage", icon: Database, labelKey: "admin.nav.storage" },
             { key: "services", path: "/admin/services", icon: AppWindow, labelKey: "admin.nav.services" },

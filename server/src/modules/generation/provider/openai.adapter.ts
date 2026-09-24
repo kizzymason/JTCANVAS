@@ -1,3 +1,4 @@
+import { StringDecoder } from "node:string_decoder";
 import { Injectable, Logger } from "@nestjs/common";
 import axios, { type AxiosInstance } from "axios";
 import { AppError, badRequest } from "../../../common/errors";
@@ -18,7 +19,8 @@ import {
     videoTaskId,
     videoUsageTokens,
 } from "./seedance-video";
-import { isWhatsTokenDurationVideoModel, whatsTokenDurationVideoRequiresRatio, whatsTokenDurationVideoResolution } from "../whatstoken-catalog";
+import { isWhatsTokenChannel, WHATSTOKEN_TEXT_MODELS, isWhatsTokenDurationVideoModel, whatsTokenDurationVideoRequiresRatio, whatsTokenDurationVideoResolution } from "../whatstoken-catalog";
+import { providerError } from "./provider-error";
 
 const VIDEO_POLL_INTERVAL_MS = 2500;
 const VIDEO_MAX_ATTEMPTS = 720; // 30 minutes at 2.5s.
@@ -38,10 +40,26 @@ export class OpenAiAdapter extends ProviderAdapter {
 
     async generate(credentials: ProviderCredentials, request: GenerationRequest, onDelta?: DeltaSink): Promise<GenerationOutput> {
         const http = this.client(credentials, request.signal);
-        if (request.capability === "image") return this.image(http, request);
-        if (request.capability === "video") return this.video(http, request);
-        if (request.capability === "audio") return this.audio(http, request);
-        return this.text(http, request, onDelta);
+        try {
+            if (request.capability === "image") return await this.image(http, request);
+            if (request.capability === "video") return await this.videos(http, request);
+            if (request.capability === "audio") return await this.audio(http, request);
+            return await this.text(http, request, onDelta, isWhatsTokenChannel(credentials) && WHATSTOKEN_TEXT_MODELS.find((model) => model.name === request.model)?.protocol === "chat");
+        } catch (error) {
+            throw providerError(error);
+        }
+    }
+
+    private async videos(http: AxiosInstance, request: GenerationRequest): Promise<GenerationOutput> {
+        const outputs: GenerationOutput[] = [];
+        for (let index = 0; index < request.count; index += 1) {
+            try { outputs.push(await this.video(http, { ...request, count: 1 })); }
+            catch (error) { if (!outputs.length) throw error; break; }
+        }
+        return { binaries: outputs.flatMap((item) => item.binaries),
+            actualQuantity: outputs.reduce((total, item) => total + (item.actualQuantity ?? request.seconds ?? 0), 0),
+            usageTokens: outputs.every((item) => item.usageTokens !== undefined) ? outputs.reduce((total, item) => total + item.usageTokens!, 0) : undefined,
+            providerTaskId: outputs[0]?.providerTaskId };
     }
 
     private async image(http: AxiosInstance, request: GenerationRequest): Promise<GenerationOutput> {
@@ -83,7 +101,7 @@ export class OpenAiAdapter extends ProviderAdapter {
 
     /** ByteDance Seedream on OpenAI-compatible relays wants 1K/2K/4K size labels, not pixel strings. */
     private async seedreamImage(http: AxiosInstance, request: GenerationRequest): Promise<GenerationOutput> {
-        const size = pricingSpec(request.quality, request.size, request.aspectPresets) || "2K";
+        const size = /^\d+x\d+$/i.test(request.size ?? "") ? request.size : pricingSpec(request.quality, request.size, request.aspectPresets) || "2K";
         const ratio = (request.size ?? "").trim();
         const body: Record<string, unknown> = {
             model: request.model,
@@ -91,10 +109,11 @@ export class OpenAiAdapter extends ProviderAdapter {
             size,
             n: request.count,
             watermark: Boolean(request.watermark),
+            ...(request.webSearch !== undefined ? { web_search: request.webSearch } : {}),
         };
-        if (/^\d+(\.\d+)?:\d+(\.\d+)?$/.test(ratio)) body.aspect_ratio = ratio;
+        if (/^\d+(\.\d+)?:\d+(\.\d+)?$/.test(ratio)) body.ratio = ratio;
         if (request.references.length) {
-            body.image = request.references.map((reference) => dataUrlOf(reference.body, reference.mimeType));
+            body.image = request.references.map(publicOrDataUrl);
         }
         const response = await http.post<ImageApiResponse>("/v1/images/generations", body);
         return { binaries: await this.readImages(response.data) };
@@ -112,8 +131,7 @@ export class OpenAiAdapter extends ProviderAdapter {
         if (request.resolution) form.append("resolution", request.resolution);
         if (request.generateAudio !== undefined) form.append("generate_audio", String(request.generateAudio));
         if (request.watermark !== undefined) form.append("watermark", String(request.watermark));
-        // The upstream caps reference inputs at 7.
-        for (const reference of request.references.slice(0, 7)) form.append("input_reference[]", blobOf(reference.body, reference.mimeType), reference.fileName);
+        for (const reference of request.references) form.append("input_reference[]", blobOf(reference.body, reference.mimeType), reference.fileName);
 
         const created = await http.post<VideoApiResponse>("/v1/videos", form);
         const taskId = created.data?.id;
@@ -135,28 +153,38 @@ export class OpenAiAdapter extends ProviderAdapter {
             size: request.size,
             generateAudio: request.generateAudio,
             watermark: request.watermark,
+            seed: request.seed,
+            cameraFixed: request.cameraFixed,
+            webSearch: request.webSearch,
             upstreamResolution: whatsTokenDurationVideoResolution(request.model, request.resolution),
             requireRatio: whatsTokenDurationVideoRequiresRatio(request.model),
-            references: request.references.slice(0, 7).map((reference) => ({
+            references: request.references.map((reference) => ({
                 mimeType: reference.mimeType,
                 url: publicOrDataUrl(reference),
+                role: reference.role,
             })),
         });
 
         let lastMissing: unknown;
         for (const path of SEEDANCE_CREATE_PATHS) {
+            let payload: Record<string, unknown>;
             try {
-                const created = await http.post<Record<string, unknown>>(path, body);
-                const taskId = videoTaskId(created.data);
-                if (!taskId) throw badRequest("NO_VIDEO_TASK_ID", videoErrorMessage(created.data) || "视频接口没有返回任务 ID");
-                this.logger.log(`Seedance ${request.model} submitted via ${path} as ${taskId}`);
-                return this.pollSeedanceVideo(http, taskId, request.signal, request.seconds);
+                const { content, images, videos, audios, metadata, prompt: _prompt, seconds: _seconds, size: _size, aspect_ratio: _aspectRatio, ...native } = body;
+                const requestBody = path.startsWith("/api/v3/") ? { ...native, content } : { ...body, content: undefined };
+                const created = await http.post<Record<string, unknown>>(path, requestBody);
+                payload = created.data;
             } catch (error) {
                 if (error instanceof AppError) throw error;
                 if (!isMissingEndpoint(error)) throw providerHttpError(error);
                 lastMissing = error;
                 this.logger.warn(`Seedance ${path} missing on ${request.model}, trying next path`);
+                continue;
             }
+            const taskId = videoTaskId(payload);
+            if (!taskId) throw badRequest("NO_VIDEO_TASK_ID", videoErrorMessage(payload) || "视频接口没有返回任务 ID");
+            this.logger.log(`Seedance ${request.model} submitted via ${path} as ${taskId}`);
+            // Once accepted, a polling failure must never create another billable upstream job.
+            return this.pollSeedanceVideo(http, taskId, request.signal, request.seconds);
         }
         throw badRequest("VIDEO_ENDPOINT_NOT_FOUND", providerHttpMessage(lastMissing) || SEEDANCE_ENDPOINT_MISSING);
     }
@@ -219,44 +247,46 @@ export class OpenAiAdapter extends ProviderAdapter {
      * Text goes through the Responses API with SSE. Chunks are pushed to `onDelta` as they arrive so
      * the caller can relay them to the browser; the full text is also returned for persistence.
      */
-    private async text(http: AxiosInstance, request: GenerationRequest, onDelta?: DeltaSink): Promise<GenerationOutput> {
+    private async text(http: AxiosInstance, request: GenerationRequest, onDelta?: DeltaSink, chat = false): Promise<GenerationOutput> {
         const response = await http.post<NodeJS.ReadableStream>(
-            "/v1/responses",
+            chat ? "/v1/chat/completions" : "/v1/responses",
             {
                 model: request.model,
-                input: [
+                [chat ? "messages" : "input"]: [
                     ...(request.systemPrompt ? [{ role: "system", content: request.systemPrompt }] : []),
                     { role: "user", content: request.prompt },
                 ],
                 stream: true,
                 // Sent whenever the caller set a ceiling: token billing freezes against this number.
-                ...(request.maxOutputTokens ? { max_output_tokens: request.maxOutputTokens } : {}),
-                ...(request.reasoningEffort && request.reasoningEffort !== "auto" ? { reasoning: { effort: request.reasoningEffort } } : {}),
+                ...(request.maxOutputTokens ? { [chat ? "max_tokens" : "max_output_tokens"]: request.maxOutputTokens } : {}),
+                ...(chat ? { stream_options: { include_usage: true } } : {}),
+                ...(request.reasoningEffort && request.reasoningEffort !== "auto" ? (chat ? { reasoning_effort: request.reasoningEffort } : { reasoning: { effort: request.reasoningEffort } }) : {}),
             },
             { responseType: "stream" },
         );
 
         let text = "";
         let buffer = "";
+        const decoder = new StringDecoder("utf8");
         let usage: GenerationOutput["usage"];
+        const consume = (line: string) => {
+            if (!line.startsWith("data:")) return;
+            const payload = line.slice(5).trim();
+            if (!payload || payload === "[DONE]") return;
+            const event = JSON.parse(payload);
+            if (event.error || event.type === "response.failed" || (event.type === "response.incomplete" && event.response?.incomplete_details?.reason !== "max_output_tokens")) throw badRequest("PROVIDER_ERROR", "模型生成未完成，请重试");
+            usage = extractTextUsage(payload) ?? usage;
+            const delta = extractDelta(payload);
+            if (delta) { text += delta; onDelta?.(delta); }
+        };
         await new Promise<void>((resolve, reject) => {
             response.data.on("data", (chunk: Buffer) => {
-                buffer += chunk.toString("utf8");
+                buffer += decoder.write(chunk);
                 const lines = buffer.split("\n");
                 buffer = lines.pop() ?? "";
-                for (const line of lines) {
-                    if (!line.startsWith("data:")) continue;
-                    const payload = line.slice(5).trim();
-                    if (!payload || payload === "[DONE]") continue;
-                    // Token billing settles on this, so it is read from the same stream as the text.
-                    usage = extractTextUsage(payload) ?? usage;
-                    const delta = extractDelta(payload);
-                    if (!delta) continue;
-                    text += delta;
-                    onDelta?.(delta);
-                }
+                try { for (const line of lines) consume(line); } catch (error) { reject(error); }
             });
-            response.data.on("end", () => resolve());
+            response.data.on("end", () => { try { buffer += decoder.end(); if (buffer.trim()) consume(buffer); resolve(); } catch (error) { reject(error); } });
             response.data.on("error", (error: Error) => reject(error));
         });
 
@@ -314,7 +344,8 @@ function withSystemPrompt(request: GenerationRequest) {
 
 function extractDelta(payload: string) {
     try {
-        const event = JSON.parse(payload) as { type?: string; delta?: string; text?: string };
+        const event = JSON.parse(payload) as { type?: string; delta?: string; text?: string; choices?: Array<{ delta?: { content?: string } }> };
+        if (typeof event.choices?.[0]?.delta?.content === "string") return event.choices[0].delta.content;
         if (typeof event.delta === "string") return event.delta;
         if (event.type === "response.output_text.done" && typeof event.text === "string") return "";
         return "";
@@ -327,15 +358,21 @@ function extractDelta(payload: string) {
  * Usage arrives on the terminal `response.completed` event. Field names differ between the Responses
  * API (`input_tokens`) and chat-style aggregators (`prompt_tokens`), so both spellings are accepted.
  */
-export function extractTextUsage(payload: string): { inputTokens: number; outputTokens: number } | undefined {
+export function extractTextUsage(payload: string): GenerationOutput["usage"] {
     try {
         const event = JSON.parse(payload) as { usage?: Record<string, unknown>; response?: { usage?: Record<string, unknown> } };
         const usage = event.response?.usage ?? event.usage;
         if (!usage) return undefined;
         const inputTokens = tokenField(usage, "input_tokens", "prompt_tokens");
         const outputTokens = tokenField(usage, "output_tokens", "completion_tokens");
-        if (inputTokens === 0 && outputTokens === 0) return undefined;
-        return { inputTokens, outputTokens };
+        const details = asRecord(usage.input_tokens_details ?? usage.prompt_tokens_details) ?? {};
+        const cacheReadTokens = tokenField(details, "cached_tokens") || tokenField(usage, "cache_read_input_tokens", "prompt_cache_hit_tokens");
+        const cacheWriteTokens = tokenField(usage, "cache_creation_input_tokens") || tokenField(details, "cache_creation_tokens");
+        if (inputTokens + outputTokens + cacheReadTokens + cacheWriteTokens === 0) return undefined;
+        // OpenAI prompt/input totals include cache; native Anthropic input excludes both buckets.
+        const nativeAnthropic = usage.prompt_tokens === undefined && (usage.cache_read_input_tokens !== undefined || usage.cache_creation_input_tokens !== undefined);
+        return { inputTokens: inputTokens + (nativeAnthropic ? cacheReadTokens + cacheWriteTokens : 0), outputTokens,
+            ...(cacheReadTokens ? { cacheReadTokens } : {}), ...(cacheWriteTokens ? { cacheWriteTokens } : {}) };
     } catch {
         return undefined;
     }
@@ -373,7 +410,7 @@ export function throwIfAborted(signal?: AbortSignal) {
     if (signal?.aborted) throw new Error("Aborted");
 }
 
-function isSeedreamModel(model: string) {
+export function isSeedreamModel(model: string) {
     return model.toLowerCase().includes("seedream");
 }
 
@@ -382,7 +419,7 @@ function isSeedreamModel(model: string) {
  * The relay's duration-priced models (MiniMax, HappyHorse) share that endpoint with Seedance; the
  * Sora paths 404 there, so anything served by this relay has to be routed the same way.
  */
-function isSeedanceModel(model: string) {
+export function isSeedanceModel(model: string) {
     return model.toLowerCase().includes("seedance") || isWhatsTokenDurationVideoModel(model);
 }
 
@@ -410,7 +447,7 @@ function providerHttpMessage(error: unknown) {
 }
 
 function providerHttpError(error: unknown): never {
-    throw badRequest("PROVIDER_ERROR", friendlySeedanceError(providerHttpMessage(error) || "上游视频接口请求失败"));
+    throw providerError(error);
 }
 
 async function readSeedanceTask(http: AxiosInstance, taskId: string, signal?: AbortSignal) {
@@ -434,4 +471,3 @@ async function readSeedanceTask(http: AxiosInstance, taskId: string, signal?: Ab
     if (merged) return merged;
     throw badRequest("VIDEO_STATUS_UNKNOWN", providerHttpMessage(lastError) || "无法查询视频任务状态");
 }
-

@@ -253,9 +253,9 @@ export class UpsertChannelDto {
 }
 
 export class UpsertPriceDto {
-    @ApiProperty({ enum: ["per_image", "per_second", "per_call"] })
-    @IsIn(["per_image", "per_second", "per_call"])
-    billingMode!: "per_image" | "per_second" | "per_call";
+    @ApiProperty({ enum: ["per_image", "per_second", "per_call", "per_token"] })
+    @IsIn(["per_image", "per_second", "per_call", "per_token"])
+    billingMode!: "per_image" | "per_second" | "per_call" | "per_token";
 
     @ApiPropertyOptional({ description: "尺寸或质量档位，留空表示该模型默认价" })
     @IsOptional()
@@ -404,4 +404,11 @@ export class ImportPiapiDto {
     @ApiProperty({ description: "账号列表", type: [Object] })
     @IsArray()
     accounts!: Array<{ username: string; apiKey: string }>;
+}
+
+export class RepriceChannelDto {
+    @ApiProperty({ description: "成本加价百分比，例如30表示成本乘以1.3" })
+    @IsString()
+    @Matches(MONEY_PATTERN, { message: "加价幅度必须为非负数字，最多6位小数" })
+    markupPercent!: string;
 }

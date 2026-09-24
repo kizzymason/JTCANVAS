@@ -1,9 +1,11 @@
 import { and, asc, eq, or, sql } from "drizzle-orm";
 import type { Database, DbTransaction } from "../../db/db.module";
 import { channelModels, channels, modelPrices } from "../../db/schema";
-import { isEmptyFeatures } from "../pricing/model-features";
+import { money } from "../../common/money";
 import {
     WHATSTOKEN_BASE_URL,
+    WHATSTOKEN_ADDED_MODEL_NAMES,
+    isWhatsTokenChannel,
     WHATSTOKEN_CHANNEL_NAME,
     WHATSTOKEN_DURATION_VIDEO_MODELS,
     WHATSTOKEN_IMAGE_MODELS,
@@ -86,13 +88,19 @@ export async function seedWhatsTokenChannel(
         let pricesInserted = 0;
         let pricesUpdated = 0;
 
+        if (!isWhatsTokenChannel(channel)) throw new Error("WhatsToken 渠道地址与协议不匹配，请在渠道配置中检查");
+        const existingModels = await tx.select().from(channelModels).where(eq(channelModels.channelId, channel.id));
+        const firstSeed = !existingModels.length && channel.catalogueRevision === 0;
+        const shouldAdd = (name: string) => firstSeed || (channel.catalogueRevision < 1 && WHATSTOKEN_ADDED_MODEL_NAMES.has(name));
+        const markup = money(channel.markupPercent).div(100).plus(1).toString();
         for (const spec of WHATSTOKEN_IMAGE_MODELS) {
+            if (!shouldAdd(spec.name)) continue;
             const result = await ensureModel(tx, channel.id, {
                 name: spec.name,
                 displayName: spec.displayName,
                 capability: "image",
                 features: whatsTokenImageFeatures(spec),
-                prices: whatsTokenImagePriceRows(spec),
+                prices: whatsTokenImagePriceRows(spec, markup),
                 enabled: spec.enabled,
             });
             modelsCreated += result.created ? 1 : 0;
@@ -100,12 +108,13 @@ export async function seedWhatsTokenChannel(
         }
 
         for (const spec of WHATSTOKEN_DURATION_VIDEO_MODELS) {
+            if (!shouldAdd(spec.name)) continue;
             const result = await ensureModel(tx, channel.id, {
                 name: spec.name,
                 displayName: spec.displayName,
                 capability: "video",
                 features: whatsTokenDurationVideoFeatures(spec),
-                prices: whatsTokenDurationVideoPriceRows(spec),
+                prices: whatsTokenDurationVideoPriceRows(spec, markup),
                 enabled: spec.enabled,
             });
             modelsCreated += result.created ? 1 : 0;
@@ -113,12 +122,13 @@ export async function seedWhatsTokenChannel(
         }
 
         for (const spec of WHATSTOKEN_TEXT_MODELS) {
+            if (!shouldAdd(spec.name)) continue;
             const result = await ensureModel(tx, channel.id, {
                 name: spec.name,
                 displayName: spec.displayName,
                 capability: "text",
                 features: parseModelFeatures({}),
-                prices: whatsTokenTextPriceRows(spec),
+                prices: whatsTokenTextPriceRows(spec, markup),
                 enabled: spec.enabled,
             });
             modelsCreated += result.created ? 1 : 0;
@@ -126,6 +136,7 @@ export async function seedWhatsTokenChannel(
         }
 
         for (const spec of WHATSTOKEN_VIDEO_MODELS) {
+            if (!shouldAdd(spec.name) && !existingModels.some((model) => model.name === spec.name)) continue;
             const result = await ensureModel(
                 tx,
                 channel.id,
@@ -134,7 +145,7 @@ export async function seedWhatsTokenChannel(
                     displayName: spec.displayName,
                     capability: "video",
                     features: whatsTokenVideoFeatures(spec),
-                    prices: whatsTokenVideoPriceRows(spec),
+                    prices: whatsTokenVideoPriceRows(spec, markup),
                 },
                 true,
             );
@@ -143,6 +154,7 @@ export async function seedWhatsTokenChannel(
             pricesUpdated += result.pricesUpdated;
         }
 
+        await tx.update(channels).set({ catalogueRevision: 1 }).where(eq(channels.id, channel.id));
         return { id: channel.id, name: channel.name, created, keyUpdated, modelsCreated, pricesInserted, pricesUpdated };
     });
 }
@@ -181,12 +193,6 @@ async function ensureModel(
             })
             .returning();
         created = true;
-    } else if (isEmptyFeatures(model.features)) {
-        [model] = await tx
-            .update(channelModels)
-            .set({ features: spec.features, updatedAt: new Date() })
-            .where(eq(channelModels.id, model.id))
-            .returning();
     }
 
     const existing = await tx.select().from(modelPrices).where(eq(modelPrices.channelModelId, model.id));

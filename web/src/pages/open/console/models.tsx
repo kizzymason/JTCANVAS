@@ -115,7 +115,16 @@ export default function OpenConsoleModelsPage() {
             title: t("openPlatform.models.specs"),
             width: 210,
             render: (_value, model) => {
-                const entries = Object.entries(model.specPrices).filter(([spec]) => spec !== "input" && spec !== "output");
+                if (model.billingMode === "per_token") {
+                    const rates = model.tokenPrices.tiers ?? [{ ...model.tokenPrices, maxInputTokens: undefined }];
+                    return <div className="flex flex-col gap-2 text-xs tabular-nums">{rates.map((rate, index) => <div key={index}>
+                        {rate.maxInputTokens !== undefined && <div>输入 ≤ {rate.maxInputTokens.toLocaleString()} Token</div>}
+                        <div>输入 ¥{rate.input} / 输出 ¥{rate.output} 每百万 Token</div>
+                        {rate.cacheRead !== undefined && <div>读缓存 ¥{rate.cacheRead} / 百万 Token</div>}
+                        {rate.cacheWrite !== undefined && <div>写缓存 ¥{rate.cacheWrite} / 百万 Token</div>}
+                    </div>)}{model.tokenPrices.peakHours && <div>UTC+8：09–12、14–18 点为 2 倍，其余 1 倍。</div>}</div>;
+                }
+                const entries = Object.entries(model.specPrices).filter(([spec]) => !spec.startsWith("tokens:") && spec !== "input" && spec !== "output");
                 if (!entries.length) return <span className="text-xs text-stone-500">-</span>;
                 return (
                     <Space size={[4, 4]} wrap>

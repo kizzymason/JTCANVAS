@@ -62,6 +62,8 @@ export type AdminChannelModel = {
 };
 
 export type AdminChannel = {
+    markupPercent: string;
+    supportsRepricing: boolean;
     id: string;
     name: string;
     baseUrl: string;
@@ -202,12 +204,9 @@ export type AdminReseller = {
     /** Resolved coefficient (1 + surcharge) after the override > tier > list-price precedence. */
     multiplier: string;
     companyName: string;
-    contactName: string;
-    contactPhone: string;
     contactEmail: string;
     website: string;
     useCase: string;
-    expectedVolume: string;
     rejectReason: string;
     appliedAt: string;
     reviewedAt: string | null;
@@ -235,6 +234,7 @@ export const adminApi = {
     adjustBalance: (id: string, body: { amount: string; note: string }) => apiPost<{ balance: string }>(`/admin/users/${id}/balance`, body),
     userLedger: (id: string, params: { page: number; pageSize: number }) => apiGet<Paginated<AdminLedgerEntry>>(`/admin/users/${id}/ledger`, { params }),
 
+    repriceChannel: (id: string, markupPercent: string) => apiPost<{ modelsUpdated: number; pricesUpdated: number; skipped: Array<{ model: string; reason: string }>; markupPercent: string }>(`/admin/channels/${id}/reprice`, { markupPercent }),
     channels: () => apiGet<AdminChannel[]>("/admin/channels"),
     createChannel: (body: Record<string, unknown>) => apiPost<{ id: string }>("/admin/channels", body),
     updateChannel: (id: string, body: Record<string, unknown>) => apiPatch<{ id: string }>(`/admin/channels/${id}`, body),

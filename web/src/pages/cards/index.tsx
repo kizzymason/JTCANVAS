@@ -103,7 +103,7 @@ export default function CardShopPage() {
     }, [catalog, email, message, method, quantity, selected, t]);
 
     return (
-        <main className="h-full overflow-y-auto bg-background">
+        <main className="h-dvh overflow-y-auto bg-background text-foreground">
             <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-5 py-10 sm:px-6 sm:py-14">
                 <header className="flex flex-col gap-3">
                     <div className="flex items-center gap-2 text-stone-950 dark:text-stone-100">
@@ -191,7 +191,7 @@ function ProductCard({ product, selected, onSelect }: { product: CardProduct; se
             disabled={soldOut}
             className={cn(
                 "flex flex-col gap-1 rounded-lg border p-4 text-left transition",
-                selected ? "border-stone-950 bg-stone-950/[0.04] dark:border-stone-100 dark:bg-white/[0.06]" : "border-stone-200 hover:border-stone-400 dark:border-stone-800",
+                selected ? "border-primary bg-accent text-primary" : "border-border bg-card hover:border-primary/50",
                 soldOut && "cursor-not-allowed opacity-55",
             )}
         >

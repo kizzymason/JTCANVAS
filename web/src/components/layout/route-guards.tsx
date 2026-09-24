@@ -1,10 +1,11 @@
-import { Spin } from "antd";
-import { type ReactNode, useLayoutEffect } from "react";
+import { Alert, Button, Spin } from "antd";
+import { type ReactNode, useEffect, useLayoutEffect, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 
 import { useAuthStore } from "@/stores/use-auth-store";
 import { useAuthModalStore } from "@/stores/use-auth-modal-store";
 import { useSiteServices } from "@/hooks/use-site-services";
+import { resellerApi } from "@/services/api/reseller";
 
 /** Shown while the bootstrap call is still in flight, so a guard never redirects on unknown state. */
 function Loading() {
@@ -49,19 +50,33 @@ export function RequireAdmin({ children }: { children: ReactNode }) {
 }
 
 /**
- * Guards the open-platform console. Admins carry reseller privileges implicitly so they can test and
- * support the platform; anyone else is sent to the landing page where they can apply.
+ * All signed-in accounts may enroll. Explicit suspension is resolved by the server, not user roles.
  */
 export function RequireReseller({ children }: { children: ReactNode }) {
     const ready = useAuthStore((state) => state.ready);
     const user = useAuthStore((state) => state.user);
     const services = useSiteServices();
     const location = useLocation();
+    const [access, setAccess] = useState<{ userId: string; allowed?: boolean; error?: boolean } | null>(null);
+    const [attempt, setAttempt] = useState(0);
+    const userId = user?.id;
+    useEffect(() => {
+        if (!ready || !userId || !services.openPlatformEnabled) return;
+        let active = true;
+        setAccess(null);
+        void resellerApi.status().then(
+            (result) => { if (active) setAccess({ userId, allowed: result.canUseConsole }); },
+            () => { if (active) setAccess({ userId, error: true }); },
+        );
+        return () => { active = false; };
+    }, [ready, userId, services.openPlatformEnabled, attempt]);
 
     if (!ready) return <Loading />;
     if (!user) return <UnauthenticatedHomeRedirect from={`${location.pathname}${location.search}`} />;
     if (!services.openPlatformEnabled) return <Navigate to="/canvas" replace />;
-    if (user.role !== "reseller" && user.role !== "admin") return <Navigate to="/open" replace />;
+    if (!access || access.userId !== userId) return <Loading />;
+    if (access.error) return <Alert type="error" message="加载开放平台权限失败" action={<Button onClick={() => setAttempt((value) => value + 1)}>重试</Button>} />;
+    if (!access.allowed) return <Navigate to="/open" replace />;
     return <>{children}</>;
 }
 

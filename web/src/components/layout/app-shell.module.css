@@ -1,0 +1,18 @@
+.sidebar { width:216px; flex-shrink:0; height:100%; overflow-y:auto; display:flex; flex-direction:column; padding:22px 14px 18px; border-right:1px solid var(--border); background:var(--background); }
+.brand { display:flex; align-items:center; gap:10px; color:var(--foreground); white-space:nowrap; padding:0 7px 34px; }
+.brandMark { width:36px; height:36px; flex-shrink:0; object-fit:contain; filter:brightness(0) invert(1); }
+:global(html.gravity:not(.dark)) .brandMark { filter:brightness(0); }
+.brandWordmark { position:relative; display:flex; align-items:baseline; gap:2px; font-family:"Segoe UI Variable Display", "Aptos Display", "PingFang SC", sans-serif; font-size:21px; font-weight:780; font-variation-settings:"wght" 780, "opsz" 26; line-height:1; letter-spacing:-.065em; }
+.brandWordmark > span:first-child { color:var(--foreground); text-shadow:0 0 16px color-mix(in srgb,var(--primary) 12%,transparent); }
+.brandWordmark > span:last-child { color:var(--primary); text-shadow:0 0 16px color-mix(in srgb,var(--primary) 22%,transparent); }
+.brandWordmark::after { position:absolute; right:2px; bottom:-7px; left:1px; height:1px; content:""; background:linear-gradient(90deg,var(--primary) 0%,color-mix(in srgb,var(--primary) 50%,transparent) 52%,transparent 100%); }
+.navigation { display:flex; flex-direction:column; gap:10px; }
+.sidebar :is(nav a,.bottom>a,.bottom>button) { display:flex; align-items:center; gap:18px; min-height:46px; padding:10px 14px; border-radius:8px; color:var(--muted-foreground); font-size:14px; cursor:pointer; white-space:nowrap; transition:background-color .16s ease,color .16s ease; }
+.sidebar :is(a,button):hover { color:var(--foreground); background:color-mix(in srgb,var(--foreground) 5%,transparent); }
+.navigation a[aria-current] { color:var(--primary-foreground); background:var(--primary); font-weight:600; box-shadow:none; }
+.navigation a[aria-current]:hover { color:var(--primary-foreground); background:var(--primary); }
+.bottom { display:flex; flex-direction:column; gap:4px; margin-top:auto; padding-top:16px; border-top:1px solid var(--border); }
+@media (max-width:767px) { .sidebar:not(.mobile) { display:none; } }
+.mobile { width:100%; border:0; min-height:100%; }
+
+.navigation svg, .bottom svg { flex-shrink:0; }

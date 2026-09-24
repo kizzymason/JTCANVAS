@@ -11,6 +11,8 @@ import { AuthService } from "../auth/auth.service";
 import { SessionService } from "../auth/session.service";
 import { CryptoService } from "../crypto/crypto.service";
 import { seedPiapiChannel } from "../generation/piapi-channel.seed";
+import { repriceWhatsTokenChannel } from "../generation/whatstoken-repricing";
+import { isWhatsTokenChannel } from "../generation/whatstoken-catalog";
 import { seedWhatsTokenChannel } from "../generation/whatstoken-channel.seed";
 import { parseModelFeatures } from "../pricing/model-features";
 import { PricingService } from "../pricing/pricing.service";
@@ -276,7 +278,7 @@ export class AdminService implements OnModuleInit {
                 await tx
                     .update(resellerAccounts)
                     .set({ status: "suspended", updatedAt: new Date() })
-                    .where(and(eq(resellerAccounts.userId, id), eq(resellerAccounts.status, "approved")));
+                    .where(and(eq(resellerAccounts.userId, id), sql`${resellerAccounts.status} <> 'suspended'`));
             }
 
             return tx
@@ -373,6 +375,8 @@ export class AdminService implements OnModuleInit {
             apiFormat: channel.apiFormat,
             enabled: channel.enabled,
             priority: channel.priority,
+            markupPercent: channel.markupPercent,
+            supportsRepricing: isWhatsTokenChannel(channel),
             // Never return the key, only whether one is stored.
             hasApiKey: Boolean(channel.apiKeyCipher),
             createdAt: channel.createdAt,
@@ -389,6 +393,12 @@ export class AdminService implements OnModuleInit {
                     prices: prices.filter((price) => price.channelModelId === model.id),
                 })),
         }));
+    }
+
+    async repriceChannel(id: string, markupPercent: string) {
+        const result = await repriceWhatsTokenChannel(this.db, id, markupPercent);
+        await this.pricing.invalidate();
+        return result;
     }
 
     async createChannel(input: UpsertChannelDto) {

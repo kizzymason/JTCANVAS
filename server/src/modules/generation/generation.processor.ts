@@ -13,6 +13,7 @@ import { StorageService } from "../storage/storage.service";
 import { WalletService } from "../wallet/wallet.service";
 import { AppError } from "../../common/errors";
 import { parseModelFeatures } from "../pricing/model-features";
+import { tokenTimeMultiplier, type TokenPrices } from "../pricing/token-pricing";
 import { countTextTokens } from "../pricing/token-counter";
 import { ApiKeyService } from "../openapi/api-key.service";
 import { UsageRecorderService } from "../openapi/usage-recorder.service";
@@ -22,6 +23,9 @@ import { friendlySeedanceError } from "./provider/seedance-video";
 import { ScriptRunnerService } from "./script-runner.service";
 import { ProviderRegistry } from "./provider/provider.registry";
 import type { GenerationRequest, ReferenceInput, GenerationOutput } from "./provider/provider.types";
+import { isSeedanceModel, isSeedreamModel } from "./provider/openai.adapter";
+import { mimeFromReferenceUrl } from "./reference-media";
+import { providerFailureDetails } from "./provider/provider-error";
 
 /**
  * Runs in the worker process only. This is the sole place where a provider credential is decrypted
@@ -61,6 +65,8 @@ export class GenerationProcessor extends WorkerHost {
         await this.db.update(generationTasks).set({ status: "running", startedAt: new Date(), updatedAt: new Date() }).where(eq(generationTasks.id, taskId));
 
         try {
+            const executionPrices = tokenPricesFrom(task.params.tokenPrices);
+            const timeMultiplier = executionPrices ? tokenTimeMultiplier(executionPrices) : "1";
             const output = await this.execute(task);
             const fileIds = await this.persistOutputs(userId, output.binaries, task.capability);
             const outputCount = task.capability === "text" ? (output.text ? 1 : 0) : fileIds.length;
@@ -83,6 +89,8 @@ export class GenerationProcessor extends WorkerHost {
                 upstreamUsdPerM: typeof params.upstreamUsdPerM === "string" ? params.upstreamUsdPerM : undefined,
                 billingMultiplier: typeof params.billingMultiplier === "string" ? params.billingMultiplier : undefined,
                 billingMode,
+                tokenTimeMultiplier: timeMultiplier,
+                videoTokenPrice: typeof params.videoTokenPrice === "string" ? params.videoTokenPrice : undefined,
                 tokenPrices: tokenPricesFrom(params.tokenPrices),
                 // An upstream that hides usage still has to be billed, so the reply is measured locally.
                 usage: settledUsage,
@@ -98,7 +106,9 @@ export class GenerationProcessor extends WorkerHost {
                     outputText: output.text ?? "",
                     providerTaskId: output.providerTaskId ?? "",
                     // Settled token counts belong on the task: the open platform reports them as `usage`.
-                    ...(settledUsage ? { params: { ...params, actualInputTokens: settledUsage.inputTokens, actualOutputTokens: settledUsage.outputTokens } } : {}),
+                    ...((settledUsage || output.usageTokens !== undefined) ? { params: { ...params,
+                        ...(settledUsage ? { actualInputTokens: settledUsage.inputTokens, actualOutputTokens: settledUsage.outputTokens, actualCacheReadTokens: settledUsage.cacheReadTokens ?? 0, actualCacheWriteTokens: settledUsage.cacheWriteTokens ?? 0, tokenTimeMultiplier: timeMultiplier } : {}),
+                        ...(output.usageTokens !== undefined ? { actualUsageTokens: output.usageTokens } : {}) } } : {}),
                     finishedAt: new Date(),
                     updatedAt: new Date(),
                 })
@@ -114,9 +124,10 @@ export class GenerationProcessor extends WorkerHost {
             this.logger.log(`Task ${taskId} finished: ${settled.succeededCount}/${task.quantity} billed, charged ${settled.actualCost}`);
         } catch (error) {
             const message = friendlySeedanceError(taskErrorMessage(error));
+            const failure = providerFailureDetails(error);
             await this.db
                 .update(generationTasks)
-                .set({ status: "failed", error: message.slice(0, 2000), finishedAt: new Date(), updatedAt: new Date() })
+                .set({ status: "failed", error: message.slice(0, 2000), ...(failure ? { params: { ...task.params, providerFailure: failure } } : {}), finishedAt: new Date(), updatedAt: new Date() })
                 .where(eq(generationTasks.id, taskId));
             // Failures are never charged.
             await this.wallet.release({ userId, taskId, amount: task.estimatedCost, note: "生成失败退回" }).catch((releaseError) => {
@@ -190,7 +201,9 @@ export class GenerationProcessor extends WorkerHost {
             capability: task.capability,
             model: task.modelName,
             prompt: task.prompt,
-            references: await this.loadReferences(task.userId, (params.references as string[]) ?? []),
+            references: await this.loadReferences(task.userId, (params.references as string[]) ?? [],
+                params.referenceMedia as Array<{ mimeType: string; role?: ReferenceInput["role"] }> | undefined,
+                !row.model.script.trim() && row.channel.apiFormat === "openai" && (isSeedanceModel(task.modelName) || isSeedreamModel(task.modelName))),
             mask: params.mask ? (await this.loadReferences(task.userId, [params.mask as string]))[0] : undefined,
             count: Number(params.count ?? 1),
             size: String(params.size ?? ""),
@@ -200,6 +213,9 @@ export class GenerationProcessor extends WorkerHost {
             resolution: String(params.resolution ?? ""),
             generateAudio: Boolean(params.generateAudio),
             watermark: Boolean(params.watermark),
+            seed: typeof params.seed === "number" ? params.seed : undefined,
+            cameraFixed: typeof params.cameraFixed === "boolean" ? params.cameraFixed : undefined,
+            webSearch: typeof params.webSearch === "boolean" ? params.webSearch : undefined,
             voice: String(params.voice ?? ""),
             audioFormat: String(params.audioFormat ?? ""),
             audioSpeed: String(params.audioSpeed ?? ""),
@@ -227,25 +243,29 @@ export class GenerationProcessor extends WorkerHost {
         return adapter.generate(credentials, request, onDelta);
     }
 
-    private async loadReferences(userId: string, storageKeys: string[]): Promise<ReferenceInput[]> {
+    private async loadReferences(userId: string, storageKeys: string[], media?: Array<{ mimeType: string; role?: ReferenceInput["role"] }>, passthrough = false): Promise<ReferenceInput[]> {
         const references: ReferenceInput[] = [];
-        for (const storageKey of storageKeys) {
+        for (const [index, storageKey] of storageKeys.entries()) {
+            const role = media?.[index]?.role;
             if (isPublicHttpUrl(storageKey)) {
-                const body = await downloadPublicImage(storageKey);
+                const mimeType = media?.[index]?.mimeType ?? mimeFromReferenceUrl(storageKey);
+                const body = passthrough ? Buffer.alloc(0) : await downloadPublicImage(storageKey);
                 references.push({
                     storageKey,
-                    mimeType: guessImageMime(storageKey),
-                    fileName: fileNameFor(storageKey, guessImageMime(storageKey)),
+                    mimeType,
+                    role,
+                    fileName: fileNameFor(storageKey, mimeType),
                     body,
                     publicUrl: storageKey,
                 });
                 continue;
             }
             const file = await this.storage.findByStorageKey(userId, storageKey);
-            if (!file) continue;
+            if (!file) throw new Error("参考素材不存在或不属于当前账号");
             references.push({
                 storageKey,
                 mimeType: file.mimeType,
+                role,
                 fileName: fileNameFor(storageKey, file.mimeType),
                 body: await this.storage.read(file),
                 publicUrl: this.storage.signedPublicUrl(storageKey),
@@ -296,7 +316,7 @@ function tokenPricesFrom(value: unknown) {
     const input = typeof record.input === "string" ? record.input : "";
     const output = typeof record.output === "string" ? record.output : "";
     if (!input && !output) return undefined;
-    return { input: input || "0", output: output || "0" };
+    return { ...record, input: input || "0", output: output || "0" } as TokenPrices;
 }
 
 /**
@@ -304,18 +324,11 @@ function tokenPricesFrom(value: unknown) {
  * at submit time (the same number the freeze used) so billing stays self-consistent; output is
  * measured from the text we actually received.
  */
-function localTextUsage(task: typeof generationTasks.$inferSelect, params: Record<string, unknown>, text: string | undefined) {
+function localTextUsage(task: typeof generationTasks.$inferSelect, params: Record<string, unknown>, text: string | undefined): import("../pricing/token-pricing").TokenUsage {
     return {
         inputTokens: asTokenCount(params.inputTokens) ?? countTextTokens(task.prompt, task.modelName),
         outputTokens: countTextTokens(text ?? "", task.modelName),
     };
-}
-
-function guessImageMime(url: string) {
-    const pathname = url.split("?")[0]?.toLowerCase() ?? "";
-    if (pathname.endsWith(".jpg") || pathname.endsWith(".jpeg")) return "image/jpeg";
-    if (pathname.endsWith(".webp")) return "image/webp";
-    return "image/png";
 }
 
 async function downloadPublicImage(url: string) {

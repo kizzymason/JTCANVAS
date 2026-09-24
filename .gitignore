@@ -17,3 +17,8 @@ plugins/canvas/*/node_modules
 web/public/plugins
 *-ssl-bundle.zip
 *.pem
+
+# 迁移与部署产物
+migstage/
+*.tar.gz
+*.tgz

@@ -4,6 +4,7 @@ import { DB, type Database } from "../../db/db.module";
 import { users } from "../../db/schema";
 import { money } from "../../common/money";
 import { effectiveMultiplier } from "../pricing/reseller-multiplier";
+import { hasOpenPlatformAccess } from "../reseller/reseller-access";
 import { SettingsService } from "../settings/settings.service";
 import { ApiKeyService, type ResolvedApiKey } from "./api-key.service";
 import { insufficientQuota, invalidApiKey, permissionDenied } from "./openai-errors";
@@ -17,6 +18,8 @@ export type ApiCaller = {
 };
 
 export type RequestWithApiCaller = {
+    url?: string;
+    method?: string;
     apiCaller?: ApiCaller;
     headers: Record<string, string | string[] | undefined>;
     ip?: string;
@@ -57,12 +60,12 @@ export class ApiKeyGuard implements CanActivate {
         const [account] = await this.db.select({ status: users.status, username: users.username, role: users.role }).from(users).where(eq(users.id, apiKey.userId)).limit(1);
         if (!account || account.status !== "active") throw permissionDenied("This account has been disabled.", "account_disabled");
 
-        // Admins carry reseller privileges implicitly so they can exercise the API while supporting it.
-        if (apiKey.resellerStatus !== "approved" && account.role !== "admin") {
-            throw permissionDenied("This account is not an approved open-platform reseller.", "reseller_not_approved");
+        if (!hasOpenPlatformAccess(apiKey.resellerStatus)) {
+            throw permissionDenied("Open-platform access for this account is suspended.", "reseller_suspended");
         }
 
-        this.assertQuotaRemaining(apiKey);
+        // An exhausted key must still be able to poll/download jobs it has already paid for.
+        if (request.method !== "GET" && request.method !== "HEAD") this.assertQuotaRemaining(apiKey);
 
         request.apiCaller = {
             userId: apiKey.userId,

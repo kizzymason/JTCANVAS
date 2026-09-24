@@ -1,9 +1,9 @@
 import { App, Button, Card, Drawer, Form, Input, Modal, Table, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { ChevronRight, History, ReceiptText, ScrollText, Shield } from "lucide-react";
-import { useCallback, useEffect, useLayoutEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Navigate, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 
 import { AccountRechargeModal } from "@/components/account/account-recharge-modal";
 import { LocalDataMigrationCard } from "@/components/account/local-data-migration-card";
@@ -148,17 +148,6 @@ export function AccountDrawer() {
             </Modal>
         </>
     );
-}
-
-/** Old /account bookmarks still work: open the drawer, then land on the canvas. */
-export function AccountRouteRedirect() {
-    const open = useAccountDrawerStore((state) => state.open);
-
-    useLayoutEffect(() => {
-        open();
-    }, [open]);
-
-    return <Navigate to="/canvas" replace />;
 }
 
 function LedgerPanel() {

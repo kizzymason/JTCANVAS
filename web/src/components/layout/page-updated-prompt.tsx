@@ -13,7 +13,7 @@ export function PageUpdatedPrompt() {
                 <h1 className="text-2xl font-semibold tracking-normal text-foreground">{t("pageUpdated.title")}</h1>
                 <button
                     type="button"
-                    className="mt-8 inline-flex h-10 items-center rounded-lg bg-stone-950 px-4 text-sm font-medium text-white transition hover:bg-stone-800 dark:bg-stone-100 dark:text-stone-950 dark:hover:bg-stone-200"
+                    className="mt-8 inline-flex h-10 items-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90"
                     onClick={() => window.location.reload()}
                 >
                     {t("pageUpdated.refresh")}

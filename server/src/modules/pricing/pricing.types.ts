@@ -26,7 +26,9 @@ export type PublicModel = {
     /** Per-spec overrides, e.g. { "1K": "0.085", "2K": "0.17" }. */
     specPrices: Record<string, string>;
     /** CNY per 1M tokens for `per_token` models; both zero for every other billing mode. */
-    tokenPrices: { input: string; output: string };
+    tokenPrices: import("./token-pricing").TokenPrices;
+    /** Public sell rate per encoded million tokens, scoped to this channel's price rows. */
+    videoTokenPrices?: Record<string, string>;
     /** Resolved generation options the UI should honour for this model. */
     features: ModelFeatures;
 };
@@ -63,6 +65,8 @@ export type EstimateResult = {
     /** `per_token` only: the token volumes the freeze was built from. */
     inputTokens?: number;
     maxOutputTokens?: number;
+    tokenPrices?: import("./token-pricing").TokenPrices;
+    videoTokenPrice?: string;
 };
 
 export const CHANNEL_MODEL_SEPARATOR = "::";

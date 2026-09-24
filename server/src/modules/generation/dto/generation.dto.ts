@@ -1,6 +1,29 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { Type } from "class-transformer";
-import { IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from "class-validator";
+import { IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min, ValidateNested } from "class-validator";
+import { PaginationDto } from "../../wallet/dto/wallet.dto";
+
+export class GenerationQueryDto extends PaginationDto {
+    @IsOptional()
+    @IsIn(["image", "video", "text", "audio"])
+    capability?: "image" | "video" | "text" | "audio";
+
+    @IsOptional()
+    @IsIn(["active"])
+    status?: "active";
+}
+
+export class GenerationReferenceDto {
+    @IsString()
+    url!: string;
+
+    @IsIn(["image", "video", "audio"])
+    type!: "image" | "video" | "audio";
+
+    @IsOptional()
+    @IsIn(["first_frame", "last_frame", "reference_image", "reference_video", "reference_audio"])
+    role?: "first_frame" | "last_frame" | "reference_image" | "reference_video" | "reference_audio";
+}
 
 export class CreateGenerationDto {
     @ApiProperty({ enum: ["image", "video", "text", "audio"] })
@@ -23,6 +46,24 @@ export class CreateGenerationDto {
     @IsString({ each: true })
     @MaxLength(2048, { each: true })
     references?: string[];
+
+    @IsOptional()
+    @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => GenerationReferenceDto)
+    referenceMedia?: GenerationReferenceDto[];
+
+    @IsOptional()
+    @IsInt()
+    seed?: number;
+
+    @IsOptional()
+    @IsBoolean()
+    cameraFixed?: boolean;
+
+    @IsOptional()
+    @IsBoolean()
+    webSearch?: boolean;
 
     @ApiPropertyOptional({ description: "蒙版 storageKey" })
     @IsOptional()

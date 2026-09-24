@@ -6,9 +6,11 @@ import { StorageService } from "../storage/storage.service";
 import { clientIp, type ApiCaller, type RequestWithApiCaller } from "./api-key.guard";
 import { VideoCreateDto } from "./dto/openai.dto";
 import { invalidRequest, upstreamError } from "./openai-errors";
-import { assertReferenceUrls, resolutionFromSize, toVideoObject, videoStatusFor } from "./openai-mappers";
+import { toVideoObject, videoStatusFor } from "./openai-mappers";
+import { videoGenerationInput } from "./generation-input";
 import { CurrentCaller, OpenApiEndpoint } from "./openapi.decorators";
 import { OpenPlatformService } from "./open-platform.service";
+import type { TaskResponse } from "../generation/generation.service";
 
 /**
  * Video follows the OpenAI async job protocol: create returns immediately with `queued`, the caller
@@ -16,7 +18,7 @@ import { OpenPlatformService } from "./open-platform.service";
  * worker, so polling is read-only and can never charge the same task twice.
  */
 @OpenApiEndpoint()
-@Controller("v1/videos")
+@Controller(["v1/videos", "v1/video/generations", "v1/videos/generations", "v3/contents/generations/tasks"])
 export class V1VideosController {
     constructor(
         private readonly openapi: OpenPlatformService,
@@ -29,31 +31,25 @@ export class V1VideosController {
     @ApiOperation({ summary: "创建视频任务（异步）" })
     async create(@CurrentCaller() caller: ApiCaller, @Body() body: VideoCreateDto, @Req() request: RequestWithApiCaller) {
         const ip = clientIp(request);
-        const call = { endpoint: "/v1/videos", capability: "video" as const, model: body.model, clientIp: ip };
+        const call = { endpoint: (request.url ?? "/v1/videos").split("?")[0]!.replace(/^\/api/, ""), capability: "video" as const, model: body.model, clientIp: ip };
         return this.openapi.runBilled(caller, call, async () => {
             const model = await this.openapi.resolveModel(caller, body.model, "video");
-            const reference = body.input_reference?.image_url;
-            const references = reference ? assertReferenceUrls([reference], "input_reference.image_url") : undefined;
+            const input = videoGenerationInput(body);
 
             const task = await this.openapi.submitTask(
                 caller,
                 {
                     capability: "video",
                     model: model.value,
-                    prompt: body.prompt,
                     count: body.n ?? 1,
-                    seconds: body.seconds,
-                    size: body.size,
-                    resolution: body.resolution || resolutionFromSize(body.size),
-                    generateAudio: body.generate_audio,
-                    references,
+                    ...input,
                     source: "openapi",
                 },
                 { ...call, deferredUsage: true },
             );
 
             return {
-                result: toVideoObject(task),
+                result: this.videoResponse(task, request),
                 usage: {
                     taskId: task.id,
                     capability: "video",
@@ -73,7 +69,7 @@ export class V1VideosController {
         return this.openapi.runBilled(caller, { endpoint: `/v1/videos/${id}`, capability: "video", clientIp: clientIp(request) }, async () => {
             const task = await this.openapi.getTask(caller, id);
             if (task.capability !== "video") throw invalidRequest(`\`${id}\` is not a video job.`, "not_a_video", "id");
-            return { result: toVideoObject(task), usage: { capability: "video", model: task.modelName } };
+            return { result: this.videoResponse(task, request), usage: { capability: "video", model: task.modelName } };
         });
     }
 
@@ -100,5 +96,17 @@ export class V1VideosController {
                 .send(body);
             return { result, usage: { capability: "video", model: task.modelName } };
         });
+    }
+
+    private videoResponse(task: TaskResponse, request: RequestWithApiCaller) {
+        const result = toVideoObject(task);
+        const urls = result.status === "completed" ? task.outputs.map((file) => this.storage.signedPublicUrl(file.storageKey)).filter((url): url is string => !!url) : [];
+        const tokens = task.params.actualUsageTokens;
+        const usage = typeof tokens === "number" ? { completion_tokens: tokens, total_tokens: tokens } : undefined;
+        if (request.url?.includes("/v3/contents/generations/tasks")) {
+            return { ...result, status: result.status === "completed" ? "succeeded" : result.status === "in_progress" ? "running" : result.status,
+                content: urls[0] ? { video_url: urls[0] } : undefined, usage };
+        }
+        return { ...result, task_id: result.id, url: urls[0], data: urls.map((url) => ({ url })), usage };
     }
 }

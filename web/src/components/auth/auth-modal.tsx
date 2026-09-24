@@ -140,15 +140,8 @@ export function AuthModal() {
                                 id="auth-modal-title"
                                 className="flex items-center gap-3 text-[28px] font-semibold leading-none tracking-[0.08em] text-stone-950 dark:text-stone-100"
                             >
-                                <span
-                                    aria-hidden
-                                    className="size-[1.22em] shrink-0 bg-current"
-                                    style={{
-                                        mask: "url(/logo.svg) center / contain no-repeat",
-                                        WebkitMask: "url(/logo.svg) center / contain no-repeat",
-                                    }}
-                                />
-                                {t("topNav.brand")}
+                                <img src="/logo.svg?v=jtcanvas" alt="" aria-hidden="true" className="size-[1.22em] shrink-0 object-contain" />
+                                {site.siteName}
                             </h1>
                         </div>
 

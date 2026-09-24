@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useRef, useState } from "react";
 import { Moon, Sun } from "lucide-react";
 import { flushSync } from "react-dom";
 import { useTranslation } from "react-i18next";
@@ -82,11 +82,16 @@ function getThemeTransitionClipPaths(variant: TransitionVariant, cx: number, cy:
     }
 }
 
-export const AnimatedThemeToggler = ({ children, className, duration = 400, variant, fromCenter = false, theme, targetTheme, onThemeChange, ...props }: AnimatedThemeTogglerProps) => {
+export const AnimatedThemeToggler = forwardRef<HTMLButtonElement, AnimatedThemeTogglerProps>(function AnimatedThemeToggler({ children, className, duration = 400, variant, fromCenter = false, theme, targetTheme, onThemeChange, ...props }, forwardedRef) {
     const { t } = useTranslation();
     const shape = variant ?? "circle";
     const [isDark, setIsDark] = useState(false);
     const buttonRef = useRef<HTMLButtonElement>(null);
+    const setButtonRef = useCallback((node: HTMLButtonElement | null) => {
+        buttonRef.current = node;
+        if (typeof forwardedRef === "function") forwardedRef(node);
+        else if (forwardedRef) forwardedRef.current = node;
+    }, [forwardedRef]);
 
     useEffect(() => {
         if (theme) {
@@ -186,9 +191,9 @@ export const AnimatedThemeToggler = ({ children, className, duration = 400, vari
     }, [shape, fromCenter, duration, isDark, targetTheme, onThemeChange]);
 
     return (
-        <button type="button" ref={buttonRef} onClick={toggleTheme} className={cn(className)} {...props}>
+        <button type="button" {...props} ref={setButtonRef} onClick={toggleTheme} className={cn(className)}>
             {children ?? (isDark ? <Sun /> : <Moon />)}
             <span className="sr-only">{props["aria-label"] || t("theme.toggle")}</span>
         </button>
     );
-};
+});

@@ -1,8 +1,7 @@
 import type { ReactNode } from "react";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 import { useAuthStore } from "@/stores/use-auth-store";
-import { useAssetStore } from "@/stores/use-asset-store";
 import { applyDefaultImageModel, useConfigStore } from "@/stores/use-config-store";
 import { useModelStore } from "@/stores/use-model-store";
 
@@ -17,8 +16,7 @@ export function ClientRootInit({ children }: { children: ReactNode }) {
     const user = useAuthStore((state) => state.user);
     const loadModels = useModelStore((state) => state.load);
     const resetModels = useModelStore((state) => state.reset);
-    const loadAssets = useAssetStore((state) => state.loadAssets);
-    const resetAssets = useAssetStore((state) => state.reset);
+    const previousUserId = useRef<string | null>(null);
 
     useEffect(() => {
         void bootstrap();
@@ -27,10 +25,21 @@ export function ClientRootInit({ children }: { children: ReactNode }) {
     useEffect(() => {
         if (!user) {
             resetModels();
-            resetAssets();
+            const hadUser = previousUserId.current !== null;
+            previousUserId.current = null;
+            if (hadUser) void import("@/stores/use-asset-store").then(({ useAssetStore }) => {
+                if (previousUserId.current === null) useAssetStore.getState().reset();
+            });
             return;
         }
-        void loadAssets().catch(() => undefined);
+        const priorUserId = previousUserId.current;
+        previousUserId.current = user.id;
+        void import("@/stores/use-asset-store").then(({ useAssetStore }) => {
+            if (previousUserId.current !== user.id) return;
+            const store = useAssetStore.getState();
+            if (priorUserId && priorUserId !== user.id) store.reset();
+            return store.loadAssets().catch(() => undefined);
+        });
         let cancelled = false;
         const run = () => {
             void loadModels().then(() => {
@@ -48,7 +57,7 @@ export function ClientRootInit({ children }: { children: ReactNode }) {
             cancelled = true;
             unsub();
         };
-    }, [loadAssets, loadModels, resetAssets, resetModels, user]);
+    }, [loadModels, resetModels, user]);
 
     return <>{children}</>;
 }

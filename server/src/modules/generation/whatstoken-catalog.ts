@@ -1,7 +1,6 @@
 import { ceilMoney, money, mulMoney, toMoneyString } from "../../common/money";
 import { defaultVideoAspectPresets } from "../pricing/aspect-presets";
 import { parseModelFeatures, type ModelFeatures } from "../pricing/model-features";
-import { TOKEN_SPEC_INPUT, TOKEN_SPEC_OUTPUT } from "../pricing/pricing.types";
 import { VIDEO_INPUT_SPEC_SUFFIX, normalizeVideoPricingResolution } from "./video-pricing-spec";
 
 /** Upstream host used by the seeded OpenAI-compatible channel. */
@@ -10,7 +9,7 @@ export const WHATSTOKEN_CHANNEL_NAME = "WhatsToken";
 
 /**
  * Published WhatsToken list prices are USD. Wallet billing is CNY NUMERIC(18,6).
- * 7.2 matches the PiAPI list conversion; 1.3 is the required sell markup (30% gross).
+ * 7.2 matches the PiAPI list conversion; 1.3 is the default cost-plus multiplier (30% above cost).
  * $1 upstream → ¥7.2 cost → ¥9.36 sell.
  */
 export const WHATSTOKEN_USD_TO_CNY = "7.2";
@@ -109,10 +108,19 @@ export type WhatsTokenTextModel = {
     inputUsdPerM: string;
     /** USD per 1M completion tokens. */
     outputUsdPerM: string;
+    cacheReadUsdPerM?: string;
+    cacheWriteUsdPerM?: string;
+    tiers?: Array<{ maxInputTokens: number; inputUsdPerM: string; outputUsdPerM: string; cacheReadUsdPerM?: string; cacheWriteUsdPerM?: string }>;
+    protocol?: "responses" | "chat";
+    peakHours?: boolean;
     enabled?: boolean;
 };
 
 export const WHATSTOKEN_IMAGE_MODELS: WhatsTokenImageModel[] = [
+    { name: "dola-seedream-5-0-pro", displayName: "Dola Seedream 5.0 Pro", sizes: { "1K": "0.0315", "2K": "0.063", "4K": "0.063" }, extraReferenceUsd: "0.0021", defaultSize: "2K" },
+    { name: "seedream-5-0-pro", displayName: "Seedream 5.0 Pro 标准", sizes: { "1K": "0.0378", "2K": "0.0756", "4K": "0.0756" }, extraReferenceUsd: "0.00252", defaultSize: "2K" },
+    { name: "seedream-5-0-spg", displayName: "Seedream 5.0 SPG", sizes: { "2K": "0.0245", "4K": "0.0245" }, extraReferenceUsd: "0", defaultSize: "2K" },
+    { name: "seedream-5.0-lite", displayName: "Seedream 5.0 Lite 标准", sizes: { "2K": "0.0126", "4K": "0.0126" }, extraReferenceUsd: "0", defaultSize: "2K" },
     {
         name: "seedream-5.0-pro-NSFW",
         displayName: "Seedream 5.0 Pro",
@@ -228,6 +236,22 @@ export const WHATSTOKEN_DURATION_VIDEO_MODELS: WhatsTokenDurationVideoModel[] = 
 ];
 
 export const WHATSTOKEN_TEXT_MODELS: WhatsTokenTextModel[] = [
+    { name: "gpt-6-astra-special", displayName: "GPT 6 Astra Special", inputUsdPerM: "1.5", outputUsdPerM: "7.5", cacheReadUsdPerM: "0.15", cacheWriteUsdPerM: "1.875", protocol: "responses", tiers: [
+        { maxInputTokens: 272000, inputUsdPerM: "1.5", outputUsdPerM: "7.5", cacheReadUsdPerM: "0.15", cacheWriteUsdPerM: "1.875" },
+        { maxInputTokens: 9999000, inputUsdPerM: "3", outputUsdPerM: "11.25", cacheReadUsdPerM: "0.3", cacheWriteUsdPerM: "3.75" },
+    ] },
+    { name: "gpt-6-astra-azure", displayName: "GPT 6 Astra Azure", inputUsdPerM: "7.8", outputUsdPerM: "39", cacheReadUsdPerM: "0.78", cacheWriteUsdPerM: "9.75", protocol: "responses", tiers: [
+        { maxInputTokens: 272000, inputUsdPerM: "7.8", outputUsdPerM: "39", cacheReadUsdPerM: "0.78", cacheWriteUsdPerM: "9.75" },
+        { maxInputTokens: 1050000, inputUsdPerM: "15.6", outputUsdPerM: "58.5", cacheReadUsdPerM: "1.56", cacheWriteUsdPerM: "19.5" },
+    ] },
+    { name: "claude-opus-5-kiro", displayName: "Claude Opus 5 Kiro", inputUsdPerM: "0.5", outputUsdPerM: "2.5", cacheReadUsdPerM: "0.05", cacheWriteUsdPerM: "0.625", protocol: "chat" },
+    { name: "claude-opus-5-ccmax", displayName: "Claude Opus 5 CCMax", inputUsdPerM: "1.65", outputUsdPerM: "8.25", cacheReadUsdPerM: "0.165", cacheWriteUsdPerM: "2.0625", protocol: "chat" },
+    { name: "claude-fable-5-1-stable", displayName: "Claude Fable 5.1 Stable", inputUsdPerM: "5.9", outputUsdPerM: "29.5", cacheReadUsdPerM: "0.1475", cacheWriteUsdPerM: "7.375", protocol: "chat" },
+    { name: "seed-Character-NSFW", displayName: "Seed Character", inputUsdPerM: "0.24", outputUsdPerM: "0.96", cacheReadUsdPerM: "0.048", protocol: "chat", tiers: [
+        { maxInputTokens: 32000, inputUsdPerM: "0.24", outputUsdPerM: "0.96", cacheReadUsdPerM: "0.048" },
+        { maxInputTokens: 128000, inputUsdPerM: "0.48", outputUsdPerM: "1.92", cacheReadUsdPerM: "0.048" },
+    ] },
+    { name: "deepseek-v4-1-flash", displayName: "DeepSeek V4.1 Flash", inputUsdPerM: "0.072", outputUsdPerM: "0.288", cacheReadUsdPerM: "0.00144", protocol: "chat", peakHours: true },
     /*
      * Tiered upstream ($0.24/$0.96 up to 32k context): the doubled tier is recorded.
      * Seeded disabled because this model answers the Responses API with an empty body — it only
@@ -243,6 +267,15 @@ export const WHATSTOKEN_TEXT_MODELS: WhatsTokenTextModel[] = [
 ];
 
 export const WHATSTOKEN_VIDEO_MODELS: WhatsTokenVideoModel[] = [
+    { name: "seedance-2.0-self-developed-NSFW", displayName: "Seedance 2.0 增强版", maxSeconds: 15, rates: [
+        { resolution: 720, withVideoUsdPerM: "3.096", withoutVideoUsdPerM: "5.04" },
+        { resolution: 1080, withVideoUsdPerM: "3.384", withoutVideoUsdPerM: "5.544" },
+        { resolution: 2160, withVideoUsdPerM: "1.728", withoutVideoUsdPerM: "2.88" },
+    ] },
+    { name: "seedance-2.5-self-developed-NSFW", displayName: "Seedance 2.5 增强版", maxSeconds: 15, rates: [
+        { resolution: 720, withVideoUsdPerM: "4.608", withoutVideoUsdPerM: "7.704" },
+        { resolution: 1080, withVideoUsdPerM: "5.04", withoutVideoUsdPerM: "8.424" },
+    ] },
     {
         name: "seedance-2-5-NSFW",
         displayName: "Seedance 2.5",
@@ -284,8 +317,8 @@ export const WHATSTOKEN_VIDEO_MODELS: WhatsTokenVideoModel[] = [
     },
 ];
 
-export function usdToSellCny(usd: string) {
-    return toMoneyString(mulMoney(mulMoney(usd, WHATSTOKEN_USD_TO_CNY), WHATSTOKEN_MARKUP));
+export function usdToSellCny(usd: string, markup = WHATSTOKEN_MARKUP) {
+    return toMoneyString(mulMoney(mulMoney(usd, WHATSTOKEN_USD_TO_CNY), markup));
 }
 
 export function seedanceEncoderGrid(resolution: number) {
@@ -324,25 +357,25 @@ export function seedanceUsdPerMillion(modelName: string, spec?: string) {
 }
 
 /** Sell CNY from actual or estimated tokens: tokens/1M × $/M × 7.2 × 1.3, rounded up. */
-export function seedanceSellCnyFromTokens(usdPerMillion: string, tokens: Parameters<typeof money>[0]) {
+export function seedanceSellCnyFromTokens(usdPerMillion: string, tokens: Parameters<typeof money>[0], markup = WHATSTOKEN_MARKUP) {
     const usd = money(tokens).div(1_000_000).times(usdPerMillion);
-    return toMoneyString(ceilMoney(mulMoney(mulMoney(usd, WHATSTOKEN_USD_TO_CNY), WHATSTOKEN_MARKUP)));
+    return toMoneyString(ceilMoney(mulMoney(mulMoney(usd, WHATSTOKEN_USD_TO_CNY), markup)));
 }
 
 /** Freeze amount for N clips of `seconds` using the encoder token formula. */
-export function seedanceCatalogSellCny(modelName: string, spec: string | undefined, seconds: number, count = 1) {
+export function seedanceCatalogSellCny(modelName: string, spec: string | undefined, seconds: number, count = 1, markup = WHATSTOKEN_MARKUP) {
     const usdPerMillion = seedanceUsdPerMillion(modelName, spec);
     if (!usdPerMillion) return undefined;
     const clips = Math.max(1, Math.floor(count));
     const perClip = Math.max(0, seconds);
     const tokens = seedanceTokensFor(seedanceSpecResolution(spec), perClip).times(clips);
-    return seedanceSellCnyFromTokens(usdPerMillion, tokens);
+    return seedanceSellCnyFromTokens(usdPerMillion, tokens, markup);
 }
 
 /** Sell CNY per second from a published $/1M-token rate at the given output height (no extra frame). */
-export function seedanceSellCnyPerSecond(usdPerMillion: string, resolution: number) {
+export function seedanceSellCnyPerSecond(usdPerMillion: string, resolution: number, markup = WHATSTOKEN_MARKUP) {
     const usdPerSecond = seedanceTokensPerSecond(resolution).div(1_000_000).times(usdPerMillion);
-    return toMoneyString(mulMoney(mulMoney(usdPerSecond, WHATSTOKEN_USD_TO_CNY), WHATSTOKEN_MARKUP));
+    return toMoneyString(mulMoney(mulMoney(usdPerSecond, WHATSTOKEN_USD_TO_CNY), markup));
 }
 
 export function whatsTokenImageFeatures(model: WhatsTokenImageModel): ModelFeatures {
@@ -368,21 +401,21 @@ export function whatsTokenVideoFeatures(model: WhatsTokenVideoModel): ModelFeatu
     });
 }
 
-function imageSellCny(model: WhatsTokenImageModel, spec: string) {
+function imageSellCny(model: WhatsTokenImageModel, spec: string, markup: string) {
     const direct = model.sizesCny?.[spec];
     if (direct) return toMoneyString(direct);
-    return usdToSellCny(model.sizes[spec] ?? "0");
+    return usdToSellCny(model.sizes[spec] ?? "0", markup);
 }
 
-export function whatsTokenImagePriceRows(model: WhatsTokenImageModel): WhatsTokenSeedPriceRow[] {
-    const extra = usdToSellCny(model.extraReferenceUsd);
+export function whatsTokenImagePriceRows(model: WhatsTokenImageModel, markup = WHATSTOKEN_MARKUP): WhatsTokenSeedPriceRow[] {
+    const extra = usdToSellCny(model.extraReferenceUsd, markup);
     const specs = Object.keys(model.sizesCny ?? model.sizes);
     const defaultSpec = specs.includes(model.defaultSize) ? model.defaultSize : (specs[0] ?? model.defaultSize);
     return [
-        { spec: null, unitPrice: imageSellCny(model, defaultSpec), extraReferencePrice: extra, billingMode: "per_image" },
+        { spec: null, unitPrice: imageSellCny(model, defaultSpec, markup), extraReferencePrice: extra, billingMode: "per_image" },
         ...specs.map((spec) => ({
             spec,
-            unitPrice: imageSellCny(model, spec),
+            unitPrice: imageSellCny(model, spec, markup),
             extraReferencePrice: extra,
             billingMode: "per_image" as const,
         })),
@@ -403,28 +436,32 @@ export function whatsTokenDurationVideoFeatures(model: WhatsTokenDurationVideoMo
  * distinguish a video reference, but the estimator still asks for `720-video` whenever one is
  * attached, and a missing row would silently fall back to the default resolution's price.
  */
-export function whatsTokenDurationVideoPriceRows(model: WhatsTokenDurationVideoModel): WhatsTokenSeedPriceRow[] {
-    const extra = usdToSellCny(model.extraReferenceUsd);
+export function whatsTokenDurationVideoPriceRows(model: WhatsTokenDurationVideoModel, markup = WHATSTOKEN_MARKUP): WhatsTokenSeedPriceRow[] {
+    const extra = usdToSellCny(model.extraReferenceUsd, markup);
     const defaultRate = model.rates[0];
     const rows: WhatsTokenSeedPriceRow[] = [
-        { spec: null, unitPrice: usdToSellCny(defaultRate.usdPerSecond), extraReferencePrice: extra, billingMode: "per_second" },
+        { spec: null, unitPrice: usdToSellCny(defaultRate.usdPerSecond, markup), extraReferencePrice: extra, billingMode: "per_second" },
     ];
     for (const rate of model.rates) {
-        const unitPrice = usdToSellCny(rate.usdPerSecond);
+        const unitPrice = usdToSellCny(rate.usdPerSecond, markup);
         rows.push({ spec: String(rate.resolution), unitPrice, extraReferencePrice: extra, billingMode: "per_second" });
         rows.push({ spec: `${rate.resolution}${VIDEO_INPUT_SPEC_SUFFIX}`, unitPrice, extraReferencePrice: extra, billingMode: "per_second" });
     }
     return rows;
 }
 
-export function whatsTokenTextPriceRows(model: WhatsTokenTextModel): WhatsTokenSeedPriceRow[] {
-    const input = usdToSellCny(model.inputUsdPerM);
-    const output = usdToSellCny(model.outputUsdPerM);
-    return [
-        { spec: null, unitPrice: input, extraReferencePrice: "0.000000", billingMode: "per_token" },
-        { spec: TOKEN_SPEC_INPUT, unitPrice: input, extraReferencePrice: "0.000000", billingMode: "per_token" },
-        { spec: TOKEN_SPEC_OUTPUT, unitPrice: output, extraReferencePrice: "0.000000", billingMode: "per_token" },
-    ];
+export function whatsTokenTextPriceRows(model: WhatsTokenTextModel, markup = WHATSTOKEN_MARKUP): WhatsTokenSeedPriceRow[] {
+    const rows: WhatsTokenSeedPriceRow[] = [];
+    const add = (spec: string | null, usd: string) => rows.push({ spec, unitPrice: usdToSellCny(usd, markup), extraReferencePrice: "0.000000", billingMode: "per_token" });
+    add(null, model.inputUsdPerM);
+    const buckets = (rate: Pick<WhatsTokenTextModel, "inputUsdPerM" | "outputUsdPerM" | "cacheReadUsdPerM" | "cacheWriteUsdPerM">, suffix = "") => {
+        add(`input${suffix}`, rate.inputUsdPerM); add(`output${suffix}`, rate.outputUsdPerM);
+        if (rate.cacheReadUsdPerM !== undefined) add(`cache_read${suffix}`, rate.cacheReadUsdPerM);
+        if (rate.cacheWriteUsdPerM !== undefined) add(`cache_write${suffix}`, rate.cacheWriteUsdPerM);
+    };
+    buckets(model);
+    for (const tier of model.tiers ?? []) buckets(tier, `:${tier.maxInputTokens}`);
+    return rows;
 }
 
 /** Upstream resolution string for a duration-priced model, e.g. 1440 → `2k`. */
@@ -444,29 +481,50 @@ export function whatsTokenDurationVideoRequiresRatio(modelName: string) {
     return WHATSTOKEN_DURATION_VIDEO_MODELS.find((item) => item.name === modelName)?.requiresRatio === true;
 }
 
-export function whatsTokenVideoPriceRows(model: WhatsTokenVideoModel): WhatsTokenSeedPriceRow[] {
+export function whatsTokenVideoPriceRows(model: WhatsTokenVideoModel, markup = WHATSTOKEN_MARKUP): WhatsTokenSeedPriceRow[] {
     const defaultRate = model.rates.find((rate) => rate.resolution === 720) ?? model.rates[0];
     const rows: WhatsTokenSeedPriceRow[] = [
         {
             spec: null,
-            unitPrice: seedanceSellCnyPerSecond(defaultRate.withoutVideoUsdPerM, defaultRate.resolution),
-            extraReferencePrice: usdToSellCny("0"),
+            unitPrice: seedanceSellCnyPerSecond(defaultRate.withoutVideoUsdPerM, defaultRate.resolution, markup),
+            extraReferencePrice: usdToSellCny("0", markup),
             billingMode: "per_second",
         },
     ];
     for (const rate of model.rates) {
+        rows.push({ spec: `tokens:${rate.resolution}`, unitPrice: usdToSellCny(rate.withoutVideoUsdPerM, markup), extraReferencePrice: "0.000000", billingMode: "per_second" });
+        rows.push({ spec: `tokens:${rate.resolution}-video`, unitPrice: usdToSellCny(rate.withVideoUsdPerM, markup), extraReferencePrice: "0.000000", billingMode: "per_second" });
         rows.push({
             spec: String(rate.resolution),
-            unitPrice: seedanceSellCnyPerSecond(rate.withoutVideoUsdPerM, rate.resolution),
-            extraReferencePrice: usdToSellCny("0"),
+            unitPrice: seedanceSellCnyPerSecond(rate.withoutVideoUsdPerM, rate.resolution, markup),
+            extraReferencePrice: usdToSellCny("0", markup),
             billingMode: "per_second",
         });
         rows.push({
             spec: `${rate.resolution}-video`,
-            unitPrice: seedanceSellCnyPerSecond(rate.withVideoUsdPerM, rate.resolution),
-            extraReferencePrice: usdToSellCny("0"),
+            unitPrice: seedanceSellCnyPerSecond(rate.withVideoUsdPerM, rate.resolution, markup),
+            extraReferencePrice: usdToSellCny("0", markup),
             billingMode: "per_second",
         });
     }
     return rows;
+}
+
+/** Match the actual provider host; a channel name alone is not sufficient authorization. */
+export function isWhatsTokenChannel(channel: { baseUrl: string; apiFormat?: string }) {
+    try { return ["www.whatstoken.ai", "whatstoken.ai"].includes(new URL(channel.baseUrl).hostname.toLowerCase()) && (!channel.apiFormat || channel.apiFormat === "openai"); }
+    catch { return false; }
+}
+
+export const WHATSTOKEN_ADDED_MODEL_NAMES = new Set([
+    "gpt-6-astra-special", "gpt-6-astra-azure", "claude-opus-5-kiro", "claude-opus-5-ccmax", "claude-fable-5-1-stable", "seed-Character-NSFW", "deepseek-v4-1-flash",
+    "seedance-2.0-self-developed-NSFW", "seedance-2.5-self-developed-NSFW",
+    "dola-seedream-5-0-pro", "seedream-5-0-pro", "seedream-5-0-spg", "seedream-5.0-lite",
+]);
+
+export function whatsTokenImagePixelSpec(modelName: string, size: string | undefined) {
+    if (!["dola-seedream-5-0-pro", "seedream-5-0-pro"].includes(modelName)) return undefined;
+    const dimensions = /^(\d+)x(\d+)$/i.exec(size ?? "");
+    if (!dimensions) return undefined;
+    return Number(dimensions[1]) * Number(dimensions[2]) <= 2_360_000 ? "1K" : "2K";
 }

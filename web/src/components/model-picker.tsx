@@ -63,7 +63,7 @@ export function ModelPicker({ value, onChange, capability, className, fullWidth 
         >
             <SelectTrigger
                 className={cn(
-                    "canvas-composer-model-picker h-8 w-fit max-w-full gap-2 rounded-full border border-input bg-transparent px-3 text-sm font-normal shadow-sm transition-colors",
+                    "canvas-composer-model-picker h-9 w-fit max-w-full gap-2 rounded-lg border border-input bg-transparent px-3 text-sm font-normal shadow-none transition-colors",
                     fullWidth ? "w-full min-w-0 justify-start" : "min-w-[9rem] justify-start",
                     "data-[state=open]:border-ring data-[state=open]:ring-2 data-[state=open]:ring-ring/20",
                     className,

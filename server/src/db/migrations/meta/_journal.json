@@ -71,6 +71,20 @@
       "when": 1788609825249,
       "tag": "0009_channel_commission",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790076796646,
+      "tag": "0010_short_albert_cleary",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1790103043931,
+      "tag": "0011_loving_trish_tilby",
+      "breakpoints": true
     }
   ]
 }

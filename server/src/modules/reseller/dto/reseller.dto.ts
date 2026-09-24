@@ -9,16 +9,6 @@ export class ApplyResellerDto {
     @Length(2, 128)
     companyName!: string;
 
-    @ApiProperty({ description: "联系人" })
-    @IsString()
-    @Length(1, 64)
-    contactName!: string;
-
-    @ApiProperty({ description: "联系电话" })
-    @IsString()
-    @Length(5, 32)
-    contactPhone!: string;
-
     @ApiPropertyOptional({ description: "联系邮箱" })
     @IsOptional()
     @IsString()
@@ -35,12 +25,6 @@ export class ApplyResellerDto {
     @IsString()
     @Length(10, 2000)
     useCase!: string;
-
-    @ApiPropertyOptional({ description: "预估调用量" })
-    @IsOptional()
-    @IsString()
-    @MaxLength(128)
-    expectedVolume?: string;
 }
 
 export class CreateTokenDto {

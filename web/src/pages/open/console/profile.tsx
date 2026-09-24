@@ -51,8 +51,8 @@ export default function OpenConsoleProfilePage() {
         const values = await form.validateFields();
         setSaving(true);
         try {
-            await resellerApi.updateProfile(values);
-            message.success(t("openPlatform.profile.saved"));
+            await resellerApi.apply(values);
+            message.success(t("openPlatform.profile.applicationSubmitted"));
             await load();
         } catch (error) {
             message.error(error instanceof ApiError ? error.message : t("openPlatform.profile.saveFailed"));
@@ -117,19 +117,13 @@ export default function OpenConsoleProfilePage() {
                     />
                 </OpsPanel>
 
-                <OpsPanel title={t("openPlatform.profile.contact")} caption={t("openPlatform.profile.contactCaption")}>
-                    <Form form={form} layout="vertical" requiredMark={false}>
+                <OpsPanel title={t("openPlatform.profile.upgradeTitle")} caption={t("openPlatform.profile.upgradeCaption")}>
+                    {profile?.status === "pending" ? <Alert className="mb-4" type="info" showIcon message={t("openPlatform.apply.pendingTitle")} description={t("openPlatform.apply.pendingHint")} /> : null}
+                    {profile?.status === "rejected" ? <Alert className="mb-4" type="warning" showIcon message={t("openPlatform.apply.rejectedTitle")} description={profile.rejectReason || t("openPlatform.apply.rejectedNoReason")} /> : null}
+                    <Form form={form} layout="vertical" requiredMark={false} disabled={!profile || profile.status === "pending" || Boolean(loadError)}>
                         <Form.Item name="companyName" label={t("openPlatform.apply.companyName")} rules={[{ required: true, min: 2, max: 128 }]}>
                             <Input />
                         </Form.Item>
-                        <div className="grid gap-3 sm:grid-cols-2">
-                            <Form.Item name="contactName" label={t("openPlatform.apply.contactName")} rules={[{ required: true, max: 64 }]}>
-                                <Input />
-                            </Form.Item>
-                            <Form.Item name="contactPhone" label={t("openPlatform.apply.contactPhone")} rules={[{ required: true, min: 5, max: 32 }]}>
-                                <Input />
-                            </Form.Item>
-                        </div>
                         <div className="grid gap-3 sm:grid-cols-2">
                             <Form.Item name="contactEmail" label={t("openPlatform.apply.contactEmail")} rules={[{ type: "email", message: t("openPlatform.apply.emailInvalid") }]}>
                                 <Input />
@@ -138,14 +132,11 @@ export default function OpenConsoleProfilePage() {
                                 <Input placeholder="https://" />
                             </Form.Item>
                         </div>
-                        <Form.Item name="expectedVolume" label={t("openPlatform.apply.expectedVolume")}>
-                            <Input />
-                        </Form.Item>
                         <Form.Item name="useCase" label={t("openPlatform.apply.useCase")} rules={[{ required: true, min: 10, max: 2000 }]}>
                             <Input.TextArea rows={4} />
                         </Form.Item>
                         <Button type="primary" loading={saving} onClick={() => void save()}>
-                            {t("common.save")}
+                            {t("openPlatform.profile.submitUpgrade")}
                         </Button>
                     </Form>
                 </OpsPanel>

@@ -32,6 +32,7 @@ import { AnnouncementsModule } from "./modules/announcements/announcements.modul
 import { CardsModule } from "./modules/cards/cards.module";
 import { OpenApiModule } from "./modules/openapi/openapi.module";
 import { ResellerModule } from "./modules/reseller/reseller.module";
+import { HomepageModule } from "./modules/homepage/homepage.module";
 
 /** Shared by the API process and the worker; the worker adds the queue processor on top. */
 @Module({
@@ -76,6 +77,7 @@ import { ResellerModule } from "./modules/reseller/reseller.module";
         VisitorsModule,
         PaymentsModule,
         AnnouncementsModule,
+        HomepageModule,
         CardsModule,
         OpenApiModule,
         ResellerModule,

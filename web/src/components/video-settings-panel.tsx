@@ -9,8 +9,6 @@ import { modelFeaturesOf } from "@/lib/model-features";
 import { type AiConfig } from "@/stores/use-config-store";
 import { normalizeModelOptionValue } from "@/stores/use-config-store";
 import { useModelStore } from "@/stores/use-model-store";
-import { hasVideoInputPricing, videoPricingSpecFor } from "@/lib/video-pricing-spec";
-import { formatMoney } from "@/services/api/models";
 
 const defaultResolutionOptions = [
     { value: "720", label: "720p" },
@@ -54,12 +52,6 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
         const preferred = resolutionOptions.find((item) => item.value === "720")?.value || resolutionOptions[0]?.value || current;
         return resolutionOptions.some((item) => item.value === current) ? current : preferred;
     }, [config.vquality, resolutionOptions]);
-    const videoRates = useMemo(() => {
-        if (!selectedModel || selectedModel.billingMode !== "per_second" || !hasVideoInputPricing(selectedModel.specPrices)) return null;
-        const without = selectedModel.specPrices[videoPricingSpecFor(resolution, false, selectedModel.modelName)] ?? selectedModel.unitPrice;
-        const withVideo = selectedModel.specPrices[videoPricingSpecFor(resolution, true, selectedModel.modelName)] ?? without;
-        return { without: formatMoney(without), with: formatMoney(withVideo) };
-    }, [resolution, selectedModel]);
     const generateAudio = config.videoGenerateAudio === "true";
     const updateDimension = (key: "width" | "height", value: number | null) => {
         const next = Math.max(1, Math.floor(value || dimensions[key] || 720));
@@ -89,11 +81,6 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
                             </OptionPill>
                         ))}
                     </div>
-                    {videoRates ? (
-                        <div className="text-[11px] leading-4 opacity-70">
-                            {t("pricing.videoRateHint", { without: videoRates.without, with: videoRates.with })}
-                        </div>
-                    ) : null}
                 </SettingGroup>
                 <SettingGroup title={t("settingsPanels.video.size")} color={theme.node.muted}>
                     <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2.5">
@@ -108,8 +95,8 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
                             <button
                                 key={item.ratio}
                                 type="button"
-                                className="flex h-[78px] cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border bg-transparent text-sm transition hover:opacity-80"
-                                style={{ borderColor: size === item.ratio ? theme.node.text : theme.node.stroke, color: theme.node.text }}
+                                className="flex h-[78px] cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border bg-transparent text-sm transition hover:opacity-80"
+                                style={{ borderColor: size === item.ratio ? theme.node.activeStroke : theme.node.stroke, color: theme.node.text }}
                                 onMouseDown={(event) => event.stopPropagation()}
                                 onClick={() => onConfigChange("size", item.ratio)}
                             >
@@ -190,7 +177,7 @@ export function normalizeVideoResolutionValue(value: string) {
 
 function OptionPill({ selected, disabled = false, theme, onClick, children }: { selected: boolean; disabled?: boolean; theme: CanvasTheme; onClick: () => void; children: ReactNode }) {
     return (
-        <button type="button" disabled={disabled} className="h-9 cursor-pointer rounded-full border px-2 text-sm transition hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-35" style={{ background: "transparent", borderColor: selected ? theme.node.text : theme.node.stroke, color: theme.node.text }} onMouseDown={(event) => event.stopPropagation()} onClick={onClick}>
+        <button type="button" disabled={disabled} className="h-9 cursor-pointer rounded-lg border px-2 text-sm transition hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-35" style={{ background: "transparent", borderColor: selected ? theme.node.activeStroke : theme.node.stroke, color: selected ? theme.node.activeStroke : theme.node.text }} onMouseDown={(event) => event.stopPropagation()} onClick={onClick}>
             {children}
         </button>
     );
@@ -219,7 +206,7 @@ function DimensionInput({ prefix, value, disabled, theme, onChange }: { prefix: 
 }
 
 function NumberInput({ value, min, max, theme, onChange }: { value: string; min: number; max: number; theme: CanvasTheme; onChange: (value: string) => void }) {
-    return <input type="number" min={min} max={max} className="h-9 rounded-full border bg-transparent px-3 text-center text-sm outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" style={{ borderColor: theme.node.stroke, color: theme.node.text, WebkitTextFillColor: theme.node.text }} value={value} onChange={(event) => onChange(event.target.value)} onMouseDown={(event) => event.stopPropagation()} />;
+    return <input type="number" min={min} max={max} className="h-9 rounded-lg border bg-transparent px-3 text-center text-sm outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" style={{ borderColor: theme.node.stroke, color: theme.node.text, WebkitTextFillColor: theme.node.text }} value={value} onChange={(event) => onChange(event.target.value)} onMouseDown={(event) => event.stopPropagation()} />;
 }
 
 function SizePreview({ width, height, color }: { width: number; height: number; color: string }) {

@@ -140,6 +140,39 @@
     }
 }
 
+/* Frontend scrollbars stay quiet at rest and use a restrained gray while scrolling. */
+html.gravity,
+html.gravity * {
+    scrollbar-color: transparent transparent;
+    scrollbar-width: thin;
+}
+
+html.gravity ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+html.gravity ::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+html.gravity ::-webkit-scrollbar-thumb {
+    border: 1px solid transparent;
+    border-radius: 999px;
+    background: transparent;
+    background-clip: padding-box;
+}
+
+html.gravity.is-scrolling,
+html.gravity .is-scrolling {
+    scrollbar-color: rgba(146, 155, 161, 0.48) transparent;
+}
+
+html.gravity.is-scrolling::-webkit-scrollbar-thumb,
+html.gravity .is-scrolling::-webkit-scrollbar-thumb {
+    background-color: rgba(146, 155, 161, 0.48);
+}
+
 @layer utilities {
     .ai-title-aurora {
         background: linear-gradient(90deg, #111827 0%, #111827 36%, #6b7280 54%, #111827 72%, #111827 100%);
