@@ -2,7 +2,7 @@ import type { PublicModel } from "../pricing/pricing.types";
 import { normalizeImageResolution } from "../pricing/model-features";
 import { normalizeQuality, pricingSpec, resolveRequestSize } from "../generation/image-size";
 import { WHATSTOKEN_IMAGE_MODELS } from "../generation/whatstoken-catalog";
-import { seedanceAspectRatio } from "../generation/provider/seedance-video";
+import { seedanceAspectRatio, seedanceVideoRatio } from "../generation/provider/seedance-video";
 import { normalizeVideoPricingResolution } from "../generation/video-pricing-spec";
 import type { ImageGenerationDto, VideoCreateDto, VideoOptionsDto } from "./dto/openai.dto";
 import { exclusiveAlias, mediaReferences, videoContent } from "./media-input";
@@ -54,7 +54,7 @@ export function videoGenerationInput(body: VideoCreateDto) {
     const resolution = exclusiveAlias([["resolution", option("resolution")], ["size", tierInSize]], normalizeVideoPricingResolution)
         ?? resolutionFromSize(rawSize) ?? "720";
     const ratio = exclusiveAlias([["ratio", option("ratio")], ["aspect_ratio", option("aspect_ratio")]]);
-    if (ratio && rawSize && !tierInSize && rawSize !== "auto" && seedanceAspectRatio(rawSize) !== ratio) {
+    if (ratio && rawSize && !tierInSize && rawSize !== "auto" && seedanceVideoRatio(rawSize) !== ratio) {
         throw invalidRequest("size and ratio disagree.", "conflicting_parameters", "ratio");
     }
     const imageAliases = ["image", "images", "image_urls", "reference_images"] as const;
