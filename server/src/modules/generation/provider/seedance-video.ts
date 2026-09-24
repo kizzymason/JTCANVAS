@@ -1,3 +1,4 @@
+import { DEFAULT_VIDEO_ASPECT_RATIO_ORDER } from "../../pricing/aspect-presets";
 /**
  * Seedance on WhatsToken / NewAPI-style relays.
  *
@@ -51,12 +52,13 @@ export function friendlySeedanceError(message: string) {
 }
 
 /**
- * Ratios the Ark / dreamina video API accepts.  Pixel sizes must be snapped onto this list:
+ * Ratios the Ark / dreamina video API accepts, i.e. the vocabulary the catalogue advertises
+ * (DEFAULT_VIDEO_ASPECT_RATIO_ORDER).  Pixel sizes must be snapped onto this list:
  * reducing a pixel pair to its exact fraction produced values like `23:41` for the legacy
  * PiAPI `736x1312` 9:16 preset, and the upstream rejects those with
  * `the parameter ratio specified in the request is not valid for model dreamina-seedance-2-0 in r2v`.
  */
-export const SEEDANCE_VIDEO_RATIOS = ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"] as const;
+export const SEEDANCE_VIDEO_RATIOS = DEFAULT_VIDEO_ASPECT_RATIO_ORDER;
 
 /** A snapped ratio may deviate at most this much (relative) before we send none instead. */
 const SEEDANCE_RATIO_TOLERANCE = 0.12;

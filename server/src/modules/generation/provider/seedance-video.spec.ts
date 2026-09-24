@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { DEFAULT_VIDEO_ASPECT_RATIO_ORDER } from "../../pricing/aspect-presets";
 import {
     SEEDANCE_CREATE_PATHS,
     friendlySeedanceError,
@@ -116,6 +117,8 @@ describe("Seedance aspect ratio snapping", () => {
         expect(seedanceVideoRatio("16:9")).toBe("16:9");
         expect(seedanceVideoRatio("9:16")).toBe("9:16");
         expect(seedanceVideoRatio("21:9")).toBe("21:9");
+        // ratios the video model configs advertise must never be rewritten
+        for (const ratio of DEFAULT_VIDEO_ASPECT_RATIO_ORDER) expect(seedanceVideoRatio(ratio)).toBe(ratio);
         expect(seedanceVideoRatio("auto")).toBeUndefined();
         expect(seedanceVideoRatio("")).toBeUndefined();
         expect(seedanceVideoRatio("100x3000")).toBeUndefined();
