@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { settleGenerationTask, videoSecondsFromParams } from "./generation-settlement";
 
+import { videoBillableQuantity } from "./generation-settlement";
+
 describe("settleGenerationTask", () => {
     it("bills a successful Seedance clip for the full requested seconds, not 1 file", () => {
         const settled = settleGenerationTask({
@@ -253,5 +255,21 @@ describe("per-token settlement", () => {
             usage: { inputTokens: 1000, outputTokens: 0 },
         });
         expect(settled).toEqual({ status: "failed", succeededCount: 0, actualCost: "0.000000" });
+    });
+});
+
+describe("video billable quantity", () => {
+    const params = { seconds: 10, count: 1 };
+
+    it("trusts a provider number that is plausibly seconds", () => {
+        expect(videoBillableQuantity(10, params, 10, 1)).toBe(10);
+        expect(videoBillableQuantity(8, params, 10, 1)).toBe(8);
+    });
+
+    it("treats anything below the 4s floor as a clip count", () => {
+        // A 10s clip reported as 1 used to bill one second instead of ten.
+        expect(videoBillableQuantity(1, params, 10, 1)).toBe(10);
+        expect(videoBillableQuantity(1, { seconds: 12, count: 1 }, 12, 1)).toBe(12);
+        expect(videoBillableQuantity(undefined, params, 10, 2)).toBe(20);
     });
 });

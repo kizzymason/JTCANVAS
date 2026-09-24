@@ -1,3 +1,4 @@
+import { defaultAspectPresets } from "../pricing/aspect-presets";
 import { describe, expect, it } from "vitest";
 import { normalizeBackground, normalizeQuality, geminiImageSize, pricingSpec, resolveRequestSize } from "./image-size";
 
@@ -70,5 +71,23 @@ describe("image sizing", () => {
         expect(geminiImageSize("1K", { width: 1424, height: 800 })).toBe("1K");
         expect(geminiImageSize(undefined, { width: 2816, height: 1584 })).toBe("2K");
         expect(geminiImageSize("high", null)).toBe("4K");
+    });
+});
+
+describe("ratio + tier resolves to the pixels the upstream honours", () => {
+    // The upstream renders explicit pixels exactly; a bare tier label let it pick its own canvas
+    // (1872x2336 for a 9:16 request, 9:16 for a 3:4 request at 4K).
+    it("maps the official Seedream presets", () => {
+        const presets = defaultAspectPresets();
+        expect(resolveRequestSize("1K", "9:16", presets)).toBe("800x1424");
+        expect(resolveRequestSize("2K", "9:16", presets)).toBe("1584x2816");
+        expect(resolveRequestSize("4K", "9:16", presets)).toBe("3040x5504");
+        expect(resolveRequestSize("4K", "3:4", presets)).toBe("3520x4704");
+        expect(resolveRequestSize("2K", "16:9", presets)).toBe("2816x1584");
+    });
+
+    it("keeps auto able to fall back to the provider, and pixels as given", () => {
+        expect(resolveRequestSize("auto", "", defaultAspectPresets())).toBeUndefined();
+        expect(resolveRequestSize("2K", "736x1312", defaultAspectPresets())).toBe("736x1312");
     });
 });

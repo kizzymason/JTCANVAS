@@ -17,7 +17,8 @@ import { StorageService } from "../storage/storage.service";
 import { isPublicHttpUrl } from "../storage/public-file-url";
 import { WalletService } from "../wallet/wallet.service";
 import { GENERATION_QUEUE, type GenerationJobData } from "./generation.queue";
-import { pricingSpec } from "./image-size";
+import { parseImageDimensions, pricingSpec } from "./image-size";
+import { tierFromPixelSize, type AspectPreset } from "../pricing/aspect-presets";
 import { billedVideoResolution, isVideoMime, videoPricingSpec } from "./video-pricing-spec";
 import { whatsTokenImagePixelSpec, seedanceSpecResolution, seedanceTokensFor } from "./whatstoken-catalog";
 import type { CreateGenerationDto } from "./dto/generation.dto";
@@ -106,7 +107,7 @@ export class GenerationService {
         const billedResolution = input.capability === "video" ? billedVideoResolution(input.resolution, publicModel.modelName) : undefined;
         const spec =
             input.capability === "image"
-                ? whatsTokenImagePixelSpec(publicModel.modelName, input.size) ?? pricingSpec(input.quality, input.size, publicModel.features.aspectPresets)
+                ? whatsTokenImagePixelSpec(publicModel.modelName, input.size) ?? imageBillingSpec(input.quality, input.size, publicModel.features.aspectPresets)
                 : input.capability === "video"
                   ? videoPricingSpec(input.resolution, references.some((item) => isVideoMime(item.mimeType)), publicModel.modelName)
                   : undefined;
@@ -376,3 +377,15 @@ export class GenerationService {
     }
 }
 
+/**
+ * Billing tier for an image request.
+ *
+ * An explicit WxH is what the upstream renders, so it decides the tier; the quality selector is
+ * only honest for a bare ratio. Without this, a 2K selection on `736x1312` was billed the 2K price
+ * while the customer received a 0.97MP (1K band) image.
+ */
+export function imageBillingSpec(quality: string | undefined, size: string | undefined, presets: AspectPreset[]) {
+    const dimensions = parseImageDimensions(size ?? "");
+    if (dimensions) return tierFromPixelSize(dimensions.width, dimensions.height, presets);
+    return pricingSpec(quality, size, presets);
+}

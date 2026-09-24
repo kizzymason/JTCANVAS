@@ -18,7 +18,7 @@ import { countTextTokens } from "../pricing/token-counter";
 import { ApiKeyService } from "../openapi/api-key.service";
 import { UsageRecorderService } from "../openapi/usage-recorder.service";
 import { GENERATION_QUEUE, statusChannel, streamChannel, type GenerationJobData } from "./generation.queue";
-import { settleGenerationTask, videoSecondsFromParams, type GenerationSettlement } from "./generation-settlement";
+import { settleGenerationTask, videoBillableQuantity, videoSecondsFromParams, type GenerationSettlement } from "./generation-settlement";
 import { friendlySeedanceError } from "./provider/seedance-video";
 import { ScriptRunnerService } from "./script-runner.service";
 import { ProviderRegistry } from "./provider/provider.registry";
@@ -72,8 +72,9 @@ export class GenerationProcessor extends WorkerHost {
             const outputCount = task.capability === "text" ? (output.text ? 1 : 0) : fileIds.length;
             const params = task.params as Record<string, unknown>;
             const actualQuantity =
-                output.actualQuantity ??
-                (task.capability === "video" && outputCount ? videoSecondsFromParams(params, task.quantity, outputCount) : undefined);
+                task.capability === "video" && outputCount
+                    ? videoBillableQuantity(output.actualQuantity, params, task.quantity, outputCount)
+                    : output.actualQuantity;
             const billingMode = typeof params.billingMode === "string" ? params.billingMode : undefined;
             // Recorded for every text task, not just token-billed ones: the open platform reports usage
             // on `per_call` models too, and settlement simply ignores it there.

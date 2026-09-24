@@ -101,7 +101,15 @@ export class OpenAiAdapter extends ProviderAdapter {
 
     /** ByteDance Seedream on OpenAI-compatible relays wants 1K/2K/4K size labels, not pixel strings. */
     private async seedreamImage(http: AxiosInstance, request: GenerationRequest): Promise<GenerationOutput> {
-        const size = /^\d+x\d+$/i.test(request.size ?? "") ? request.size : pricingSpec(request.quality, request.size, request.aspectPresets) || "2K";
+        // The upstream honours explicit pixels exactly, but a bare tier label means "pick your own
+        // canvas": `2K` + `9:16` came back 1872x2336 (4:5) and `4K` + `3:4` came back 9:16 shaped.
+        // A tier plus a ratio is therefore resolved to the preset's pixels before it is sent.
+        const tier = normalizeQuality(request.quality);
+        const size =
+            (/^\d+x\d+$/i.test(request.size ?? "")
+                ? request.size
+                : (tier ? resolveRequestSize(request.quality, request.size, request.aspectPresets) : undefined) ??
+                  pricingSpec(request.quality, request.size, request.aspectPresets)) || "2K";
         const ratio = (request.size ?? "").trim();
         const body: Record<string, unknown> = {
             model: request.model,
