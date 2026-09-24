@@ -75,6 +75,22 @@ export function settleGenerationTask(input: GenerationSettlementInput): Generati
     };
 }
 
+/** Ark's Seedance floor. A reported quantity below this is a clip count, not seconds. */
+export const MIN_VIDEO_SECONDS = 4;
+
+/**
+ * Billable units for a finished video task.
+ *
+ * Adapters normally report seconds, but a clip count (1 per delivered clip) has shown up as well:
+ * six tasks on 2026-09-02 reported 1 for a 10s clip, so the customer was charged 1/10 of what the
+ * upstream charged us. Anything below the 4s floor therefore falls back to the per-clip seconds
+ * recorded on the task.
+ */
+export function videoBillableQuantity(reported: number | undefined, params: Record<string, unknown> | undefined, quantity: number, outputCount: number) {
+    if (reported != null && Number.isFinite(reported) && reported >= MIN_VIDEO_SECONDS) return reported;
+    return videoSecondsFromParams(params, quantity, outputCount);
+}
+
 /** Seconds to bill when the adapter omitted `actualQuantity` but we have N clips. */
 export function videoSecondsFromParams(params: Record<string, unknown> | undefined, quantity: number, outputCount: number) {
     const seconds = Math.floor(Number(params?.seconds ?? 0));
