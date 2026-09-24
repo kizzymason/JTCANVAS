@@ -3,6 +3,8 @@ import {
     SEEDANCE_CREATE_PATHS,
     friendlySeedanceError,
     seedanceCreateBody,
+    seedanceAspectRatio,
+    seedanceVideoRatio,
     seedanceResolution,
     seedanceStatusPaths,
     videoResultUrl,
@@ -96,5 +98,40 @@ describe("Seedance WhatsToken paths", () => {
         expect(videoUsageTokens({ data: { usage: { output_tokens: "100858" } } })).toBe(100858);
         expect(videoUsageTokens({ data: [{ usage: { completion_tokens: 130196 } }] })).toBe(130196);
         expect(videoUsageTokens({ status: "succeeded" })).toBeUndefined();
+    });
+});
+
+
+describe("Seedance aspect ratio snapping", () => {
+    it("keeps the general helper exact, and snaps only for video", () => {
+        expect(seedanceAspectRatio("736x1312")).toBe("23:41");
+        expect(seedanceAspectRatio("1024x1536")).toBe("2:3");
+        expect(seedanceVideoRatio("736x1312")).toBe("9:16");
+        expect(seedanceVideoRatio("1312x736")).toBe("16:9");
+        expect(seedanceVideoRatio("800x1424")).toBe("9:16");
+        expect(seedanceVideoRatio("2048x2048")).toBe("1:1");
+    });
+
+    it("keeps supported video labels, ignores auto, and drops sizes with no close ratio", () => {
+        expect(seedanceVideoRatio("16:9")).toBe("16:9");
+        expect(seedanceVideoRatio("9:16")).toBe("9:16");
+        expect(seedanceVideoRatio("21:9")).toBe("21:9");
+        expect(seedanceVideoRatio("auto")).toBeUndefined();
+        expect(seedanceVideoRatio("")).toBeUndefined();
+        expect(seedanceVideoRatio("100x3000")).toBeUndefined();
+    });
+
+    it("never puts an unsupported fraction in a video create body", () => {
+        const body = seedanceCreateBody({
+            model: "seedance-2-0-pro-NSFW",
+            prompt: "walk",
+            seconds: 10,
+            resolution: "480",
+            size: "736x1312",
+        });
+        expect(body.metadata).toMatchObject({ ratio: "9:16" });
+        expect(body.ratio).toBe("9:16");
+        expect(body.aspect_ratio).toBe("9:16");
+        expect(JSON.stringify(body)).not.toContain("23:41");
     });
 });

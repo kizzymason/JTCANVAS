@@ -50,6 +50,44 @@ export function friendlySeedanceError(message: string) {
     return raw;
 }
 
+/**
+ * Ratios the Ark / dreamina video API accepts.  Pixel sizes must be snapped onto this list:
+ * reducing a pixel pair to its exact fraction produced values like `23:41` for the legacy
+ * PiAPI `736x1312` 9:16 preset, and the upstream rejects those with
+ * `the parameter ratio specified in the request is not valid for model dreamina-seedance-2-0 in r2v`.
+ */
+export const SEEDANCE_VIDEO_RATIOS = ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9"] as const;
+
+/** A snapped ratio may deviate at most this much (relative) before we send none instead. */
+const SEEDANCE_RATIO_TOLERANCE = 0.12;
+
+function seedanceRatioValue(ratio: string): number | undefined {
+    const match = ratio.trim().match(/^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/);
+    if (!match) return undefined;
+    const width = Number(match[1]);
+    const height = Number(match[2]);
+    if (!width || !height) return undefined;
+    return width / height;
+}
+
+/** Nearest Ark-supported ratio for any ratio string, or undefined when nothing is close enough. */
+export function seedanceSupportedRatio(ratio: string): string | undefined {
+    const target = seedanceRatioValue(ratio);
+    if (target === undefined) return undefined;
+    let best: string | undefined;
+    let bestDelta = Number.POSITIVE_INFINITY;
+    for (const candidate of SEEDANCE_VIDEO_RATIOS) {
+        const value = seedanceRatioValue(candidate);
+        if (value === undefined) continue;
+        const delta = Math.abs(value - target) / Math.max(value, target);
+        if (delta < bestDelta) {
+            bestDelta = delta;
+            best = candidate;
+        }
+    }
+    return bestDelta <= SEEDANCE_RATIO_TOLERANCE ? best : undefined;
+}
+
 export function seedanceAspectRatio(size: string | undefined) {
     const value = (size ?? "").trim();
     if (!value || value === "auto") return undefined;
@@ -62,6 +100,17 @@ export function seedanceAspectRatio(size: string | undefined) {
     const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a);
     const divisor = gcd(width, height);
     return `${width / divisor}:${height / divisor}`;
+}
+
+/**
+ * Video requests only: the Ark / dreamina API accepts a fixed ratio vocabulary and rejects a
+ * reduced fraction such as the `23:41` that the legacy PiAPI `736x1312` 9:16 preset produced.
+ * Returns undefined when the requested geometry is too far from every supported ratio, so the
+ * caller can omit the ratio instead of sending a value the upstream will refuse.
+ */
+export function seedanceVideoRatio(size: string | undefined) {
+    const ratio = seedanceAspectRatio(size);
+    return ratio === undefined ? undefined : seedanceSupportedRatio(ratio);
 }
 
 export function seedanceCreateBody(input: {
@@ -82,7 +131,7 @@ export function seedanceCreateBody(input: {
     requireRatio?: boolean;
 }) {
     const resolution = input.upstreamResolution ?? seedanceResolution(input.resolution);
-    const ratio = seedanceAspectRatio(input.size) ?? (input.requireRatio ? "16:9" : undefined);
+    const ratio = seedanceVideoRatio(input.size) ?? (input.requireRatio ? "16:9" : undefined);
     const duration = input.seconds || 5;
     const generateAudio = input.generateAudio ?? true;
     const watermark = Boolean(input.watermark);
