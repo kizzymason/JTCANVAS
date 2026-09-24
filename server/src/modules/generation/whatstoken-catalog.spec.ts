@@ -32,12 +32,11 @@ describe("WhatsToken catalog prices", () => {
 
     it("seeds Pro pixel tiers and extra-reference from the second image", () => {
         const model = WHATSTOKEN_IMAGE_MODELS.find((item) => item.name === "seedream-5.0-pro-NSFW")!;
-        expect(whatsTokenImageFeatures(model).resolutions).toEqual(["1K", "2K", "4K"]);
+        expect(whatsTokenImageFeatures(model).resolutions).toEqual(["1K", "2K"]);
         expect(whatsTokenImagePriceRows(model)).toEqual([
             { spec: null, unitPrice: "1.010880", extraReferencePrice: "0.033696", billingMode: "per_image" },
             { spec: "1K", unitPrice: "0.505440", extraReferencePrice: "0.033696", billingMode: "per_image" },
             { spec: "2K", unitPrice: "1.010880", extraReferencePrice: "0.033696", billingMode: "per_image" },
-            { spec: "4K", unitPrice: "1.010880", extraReferencePrice: "0.033696", billingMode: "per_image" },
         ]);
     });
 

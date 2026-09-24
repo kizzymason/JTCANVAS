@@ -118,16 +118,18 @@ export type WhatsTokenTextModel = {
 
 export const WHATSTOKEN_IMAGE_MODELS: WhatsTokenImageModel[] = [
     { name: "dola-seedream-5-0-pro", displayName: "Dola Seedream 5.0 Pro", sizes: { "1K": "0.0315", "2K": "0.063", "4K": "0.063" }, extraReferenceUsd: "0.0021", defaultSize: "2K" },
-    { name: "seedream-5-0-pro", displayName: "Seedream 5.0 Pro 标准", sizes: { "1K": "0.0378", "2K": "0.0756", "4K": "0.0756" }, extraReferenceUsd: "0.00252", defaultSize: "2K" },
+    // pro 系列上游只接受 1K/2K：4K 标签被拒（size 必须为 WIDTHxHEIGHT 或受支持预设），显式像素上限 4,624,220 像素。
+    { name: "seedream-5-0-pro", displayName: "Seedream 5.0 Pro 标准", sizes: { "1K": "0.0378", "2K": "0.0756" }, extraReferenceUsd: "0.00252", defaultSize: "2K" },
     { name: "seedream-5-0-spg", displayName: "Seedream 5.0 SPG", sizes: { "2K": "0.0245", "4K": "0.0245" }, extraReferenceUsd: "0", defaultSize: "2K" },
     { name: "seedream-5.0-lite", displayName: "Seedream 5.0 Lite 标准", sizes: { "2K": "0.0126", "4K": "0.0126" }, extraReferenceUsd: "0", defaultSize: "2K" },
     {
         name: "seedream-5.0-pro-NSFW",
         displayName: "Seedream 5.0 Pro",
-        // ≤2.36M pixels → $0.054 (1K). Larger 2K/4K outputs sit in the ≤100M tier → $0.108.
-        sizes: { "1K": "0.054", "2K": "0.108", "4K": "0.108" },
+        // ≤2.36M pixels → $0.054 (1K). Larger 2K outputs sit in the ≤100M tier → $0.108.
+        // 上游只认 1K/2K（4K 标签报 400，显式像素上限 4,624,220），故不再提供 4K 档。
+        sizes: { "1K": "0.054", "2K": "0.108" },
         extraReferenceUsd: "0.0036",
-        defaultSize: "4K",
+        defaultSize: "2K",
     },
     {
         name: "seedream-5.0-lite-NSFW",
