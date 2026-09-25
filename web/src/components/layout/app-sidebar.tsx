@@ -18,7 +18,7 @@ export function AppSidebar({ onNavigate, mobile = false }: { onNavigate?: () => 
     const { pathname } = useLocation();
     const user = useAuthStore((s) => s.user);
     const services = useSiteServices();
-    const openHelp = useAnnouncementStore((s) => s.openJoinCommunity);
+    const openAnnouncements = useAnnouncementStore((s) => s.openList);
     const preload = (path: string) => { if (user) void pagePreloaders[path]?.().catch(() => undefined); };
     const items = [
         { path: "/", title: "首页", icon: Home, show: true },
@@ -37,7 +37,7 @@ export function AppSidebar({ onNavigate, mobile = false }: { onNavigate?: () => 
         </nav>
         <div className={styles.bottom}>
             {services.openPlatformEnabled ? <Link to="/open" title="API 开放平台" onPointerEnter={() => preload("/open")} onFocus={() => preload("/open")} onClick={(event) => { if (requireAuth("/open")) event.preventDefault(); onNavigate?.(); }}><Code2 size={20} /><span>API 开放平台</span></Link> : null}
-            <button onClick={openHelp} title="公告与社区"><HelpCircle size={20} /><span>公告与社区</span></button>
+            <button onClick={openAnnouncements} title="公告与社区"><HelpCircle size={20} /><span>公告与社区</span></button>
         </div>
     </aside>;
 }
