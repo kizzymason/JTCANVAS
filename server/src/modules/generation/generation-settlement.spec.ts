@@ -108,6 +108,20 @@ describe("Seedance token settlement", () => {
         expect(settled.actualCost).toBe("7.862400");
     });
 
+    it("bills the relay's usage for a reference-video clip instead of the seconds freeze", () => {
+        // 15s 480p with one reference video: the freeze covers output + reference (302156 tokens), the
+        // relay reported 251518, so the user pays the real tokens rather than the old 5.837364.
+        const settled = settleGenerationTask({
+            capability: "video",
+            quantity: 15,
+            outputCount: 1,
+            estimatedCost: "11.674728",
+            usageTokens: 251518,
+            videoTokenPrice: "48.2976",
+            billingMultiplier: "0.8",
+        });
+        expect(settled.actualCost).toBe("9.718173");
+    });
     it("does not charge above the freeze when upstream tokens exceed the estimate", () => {
         const settled = settleGenerationTask({
             capability: "video",

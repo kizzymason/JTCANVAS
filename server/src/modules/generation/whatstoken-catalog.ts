@@ -348,6 +348,25 @@ export function seedanceTokensPerSecond(resolution: number) {
     return money(grid.width).times(grid.height).times(24).div(1024);
 }
 
+/**
+ * WhatsToken bills a reference video's own frames as extra tokens on top of the generated clip, and
+ * the relay reports them in the same counter as the output. A 15 s 480p generation with one
+ * reference video came back as 251518 tokens against a 151078 output-only freeze (1.67x), so every
+ * reference video is frozen for at least this many seconds. It is only a freeze: the settle charges
+ * the usage the relay reports, so a longer reference still gets billed correctly.
+ */
+export const SEEDANCE_REFERENCE_VIDEO_SECONDS = 15;
+
+/** Tokens to freeze for one video request: output clips + the reference videos' own frames. */
+export function seedanceEstimatedTokens(params: { resolution: number; seconds: number; count?: number; videoReferenceCount?: number }) {
+    const clips = Math.max(1, params.count ?? 1);
+    const output = seedanceTokensFor(params.resolution, Math.max(0, params.seconds)).times(clips);
+    const references = Math.max(0, params.videoReferenceCount ?? 0);
+    if (!references) return output.floor();
+    const referenceSeconds = Math.max(params.seconds, SEEDANCE_REFERENCE_VIDEO_SECONDS);
+    return output.plus(seedanceTokensFor(params.resolution, referenceSeconds).times(references)).floor();
+}
+
 /** Published $/1M for a WhatsToken Seedance model + spec (`720` / `720-video`). */
 export function seedanceUsdPerMillion(modelName: string, spec?: string) {
     const model = WHATSTOKEN_VIDEO_MODELS.find((item) => item.name === modelName);

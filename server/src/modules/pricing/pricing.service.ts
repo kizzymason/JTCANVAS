@@ -6,7 +6,7 @@ import { DB, type Database } from "../../db/db.module";
 import { channelModels, channels, modelPrices } from "../../db/schema";
 import { badRequest, noUsableChannel } from "../../common/errors";
 import { ceilMoney, money, mulMoney, toMoneyString } from "../../common/money";
-import { isWhatsTokenChannel, WHATSTOKEN_TEXT_MODELS, seedanceTokensFor, seedanceSpecResolution } from "../generation/whatstoken-catalog";
+import { isWhatsTokenChannel, WHATSTOKEN_TEXT_MODELS, seedanceEstimatedTokens, seedanceSpecResolution } from "../generation/whatstoken-catalog";
 import { REDIS } from "../../redis/redis.module";
 import { parseModelFeatures } from "./model-features";
 import {
@@ -146,7 +146,12 @@ export class PricingService {
         let amount = ceilMoney(applyMultiplier(raw.lessThan(price.minCharge) ? price.minCharge : raw, multiplier));
         const videoTokenPrice = model.videoTokenPrices?.[request.spec ?? "720"];
         if (model.billingMode === "per_second" && videoTokenPrice) {
-            const tokens = seedanceTokensFor(seedanceSpecResolution(request.spec), request.seconds ?? 0).times(request.count ?? 1);
+            const tokens = seedanceEstimatedTokens({
+                resolution: seedanceSpecResolution(request.spec),
+                seconds: request.seconds ?? 0,
+                count: request.count ?? 1,
+                videoReferenceCount: request.videoReferenceCount ?? 0,
+            });
             const encoded = tokens.div(1_000_000).times(videoTokenPrice).plus(referenceSurcharge);
             amount = ceilMoney(applyMultiplier(encoded.lessThan(price.minCharge) ? price.minCharge : encoded, multiplier));
         }

@@ -20,7 +20,7 @@ import { GENERATION_QUEUE, type GenerationJobData } from "./generation.queue";
 import { parseImageDimensions, pricingSpec } from "./image-size";
 import { tierFromPixelSize, type AspectPreset } from "../pricing/aspect-presets";
 import { billedVideoResolution, isVideoMime, videoPricingSpec } from "./video-pricing-spec";
-import { whatsTokenImagePixelSpec, seedanceSpecResolution, seedanceTokensFor } from "./whatstoken-catalog";
+import { whatsTokenImagePixelSpec, seedanceSpecResolution, seedanceEstimatedTokens } from "./whatstoken-catalog";
 import type { CreateGenerationDto } from "./dto/generation.dto";
 import { assertReferenceKind, decodeReferenceImage, mediaMime, mimeFromReferenceUrl } from "./reference-media";
 
@@ -111,6 +111,7 @@ export class GenerationService {
                 : input.capability === "video"
                   ? videoPricingSpec(input.resolution, references.some((item) => isVideoMime(item.mimeType)), publicModel.modelName)
                   : undefined;
+        const videoReferenceCount = references.filter((item) => isVideoMime(item.mimeType)).length;
         // Token counts are always derived server-side; a client-supplied count would be a billing hole.
         const maxOutputTokens = publicModel.billingMode === "per_token" ? (input.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS) : undefined;
         const inputTokens = publicModel.billingMode === "per_token" ? billableInputTokens(input.prompt, publicModel.modelName) : undefined;
@@ -121,6 +122,7 @@ export class GenerationService {
                 seconds: input.seconds,
                 spec,
                 referenceCount: references.length,
+                videoReferenceCount,
                 inputTokens,
                 maxOutputTokens,
             },
@@ -133,7 +135,12 @@ export class GenerationService {
         const videoSeconds = input.seconds ?? 0;
         const estimatedTokens =
             estimate.videoTokenPrice && videoSeconds >= 1
-                ? seedanceTokensFor(seedanceSpecResolution(spec ?? billedResolution), videoSeconds).times(videoCount).toFixed(0)
+                ? seedanceEstimatedTokens({
+                      resolution: seedanceSpecResolution(spec ?? billedResolution),
+                      seconds: videoSeconds,
+                      count: videoCount,
+                      videoReferenceCount,
+                  }).toFixed(0)
                 : "";
 
         // One transaction: the task row and the frozen funds must appear together or not at all.
