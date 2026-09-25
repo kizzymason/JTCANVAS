@@ -25,7 +25,7 @@ import { ProviderRegistry } from "./provider/provider.registry";
 import type { GenerationRequest, ReferenceInput, GenerationOutput } from "./provider/provider.types";
 import { isSeedanceModel, isSeedreamModel } from "./provider/openai.adapter";
 import { mimeFromReferenceUrl } from "./reference-media";
-import { providerFailureDetails } from "./provider/provider-error";
+import { friendlyUpstreamError, providerFailureDetails } from "./provider/provider-error";
 
 /**
  * Runs in the worker process only. This is the sole place where a provider credential is decrypted
@@ -124,7 +124,7 @@ export class GenerationProcessor extends WorkerHost {
             await this.publishStatus(taskId, settled.status === "failed" ? "failed" : "succeeded");
             this.logger.log(`Task ${taskId} finished: ${settled.succeededCount}/${task.quantity} billed, charged ${settled.actualCost}`);
         } catch (error) {
-            const message = friendlySeedanceError(taskErrorMessage(error));
+            const message = friendlySeedanceError(friendlyUpstreamError(taskErrorMessage(error)));
             const failure = providerFailureDetails(error);
             await this.db
                 .update(generationTasks)
