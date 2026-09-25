@@ -5,7 +5,7 @@ import { validate } from "class-validator";
 import { RepriceChannelDto } from "../admin/dto/admin.dto";
 import { tokenFreezeCost, tokenTimeMultiplier, tokenUsageCostString, scaleTokenPrices } from "../pricing/token-pricing";
 import { catalogPriceRows } from "./whatstoken-repricing";
-import { isWhatsTokenChannel, WHATSTOKEN_ADDED_MODEL_NAMES, whatsTokenImagePixelSpec } from "./whatstoken-catalog";
+import { isWhatsTokenChannel, WHATSTOKEN_ADDED_MODEL_NAMES, whatsTokenImagePixelSpec, seedanceEstimatedTokens, seedanceTokensFor } from "./whatstoken-catalog";
 import { settleGenerationTask } from "./generation-settlement";
 
 const rates = (name: string, factor = "1.3") => Object.fromEntries(catalogPriceRows(name, factor)!.map((row) => [row.spec ?? "default", row.unitPrice]));
@@ -28,6 +28,17 @@ describe("cost-plus catalogue", () => {
         expect(rates("seedream-5.0-lite")["2K"]).toBe("0.117936");
         expect(whatsTokenImagePixelSpec("seedream-5-0-pro", "1600x1472")).toBe("1K");
         expect(whatsTokenImagePixelSpec("seedream-5-0-pro", "1600x1488")).toBe("2K");
+    });
+    it("freezes a reference video's own frames on top of the output clip", () => {
+        // Regression: 15s 480p with one reference video. WhatsToken billed 251518 tokens while the
+        // output-only freeze was 151078, so the reference frames have to be frozen up front.
+        expect(seedanceTokensFor(480, 15).toFixed(0)).toBe("151078");
+        expect(seedanceEstimatedTokens({ resolution: 480, seconds: 15, count: 1, videoReferenceCount: 0 }).toFixed(0)).toBe("151078");
+        expect(seedanceEstimatedTokens({ resolution: 480, seconds: 15, count: 1, videoReferenceCount: 1 }).gte(251518)).toBe(true);
+        // A 4s clip with a 15s reference: the reference floor keeps the freeze above the real cost.
+        expect(seedanceEstimatedTokens({ resolution: 480, seconds: 4, count: 1, videoReferenceCount: 1 }).toFixed(0)).toBe(
+            seedanceTokensFor(480, 4).plus(seedanceTokensFor(480, 15)).toFixed(0),
+        );
     });
     it("uses separate encoded-token video costs for reference and non-reference", () => {
         expect(rates("seedance-2.0-self-developed-NSFW")).toMatchObject({ "tokens:720": "47.174400", "tokens:720-video": "28.978560", "tokens:2160": "26.956800" });

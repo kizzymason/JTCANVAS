@@ -130,11 +130,11 @@ function tokenActualCost(input: GenerationSettlementInput) {
 }
 
 function videoActualCost(input: GenerationSettlementInput, requested: number, billed: number) {
-    const bySeconds = proRate(input.estimatedCost, requested, billed);
-    if (billed < requested) return bySeconds;
-    const tokenCost = seedanceTokenSell(input);
-    if (!tokenCost) return bySeconds;
-    return money(tokenCost).lt(bySeconds) ? tokenCost : bySeconds;
+    // Token-billed video: the relay's usage is the truth, so bill it whenever it was reported and
+    // fall back to the seconds pro-rate only when the provider sent none. The freeze stays the hard
+    // ceiling because `WalletService.settle` cannot release more than was frozen.
+    const tokenCost = seedanceTokenSell(input) ?? proRate(input.estimatedCost, requested, billed);
+    return money(tokenCost).lt(money(input.estimatedCost)) ? tokenCost : toMoneyString(input.estimatedCost);
 }
 
 function seedanceTokenSell(input: GenerationSettlementInput) {

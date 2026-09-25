@@ -41,6 +41,8 @@ export type EstimateRequest = {
     /** Size or quality tier used to pick a spec price. */
     spec?: string;
     referenceCount?: number;
+    /** Video references only: WhatsToken bills their own frames on top of the output clips. */
+    videoReferenceCount?: number;
     /** `per_token` only: prompt tokens counted before the call. */
     inputTokens?: number;
     /** `per_token` only: the output ceiling used to freeze, so the settle can never exceed it. */
