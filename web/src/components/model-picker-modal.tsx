@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { App, Button, Drawer, Modal } from "antd";
-import { Check, ChevronRight, Sparkles } from "lucide-react";
+import { Check } from "lucide-react";
 
 import { ModelBrandIcon } from "@/components/model-brand-icon";
 import { formatMoney } from "@/lib/format-money";
@@ -41,7 +41,8 @@ function Badge({ label, tone }: { label: string; tone?: string }) {
 
 /**
  * 模型选择弹窗：桌面居中、移动端底部弹出。
- * 左侧按后台维护的分组归类，卡片上直接显示标识（最新/推荐…），右侧显示该模型的完整介绍。
+ * 分组在顶部用滑块切换（选中项有一块会滑动的底），卡片上直接显示标识（最新/推荐…）与简介，
+ * 右侧显示当前所选模型的完整介绍与计费规格。
  */
 export function ModelPickerModal({ open, onClose, value, onChange, capability, mobile }: {
     open: boolean;
@@ -57,6 +58,8 @@ export function ModelPickerModal({ open, onClose, value, onChange, capability, m
     const { catalog, loading, error } = useModelCatalog(open);
     const [group, setGroup] = useState<string>("all");
     const [draft, setDraft] = useState(value);
+    const barRef = useRef<HTMLDivElement | null>(null);
+    const [thumb, setThumb] = useState({ x: 0, width: 0, ready: false });
 
     useEffect(() => { void loadModels(); }, [loadModels]);
     useEffect(() => { if (open) { setDraft(value); setGroup("all"); } }, [open, value]);
@@ -76,58 +79,85 @@ export function ModelPickerModal({ open, onClose, value, onChange, capability, m
         return list;
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [available, catalog]);
+    const chips = useMemo(
+        () => [{ key: "all", name: "全部模型", count: available.length }, ...sections.map((section) => ({ key: section.key, name: section.name, count: section.items.length }))],
+        [available.length, sections],
+    );
     const active = group === "all" ? null : sections.find((section) => section.key === group) ?? sections[0];
     /** 「全部模型」展示所有可用模型；选择具体分组时只看该组。 */
     const items = group === "all" ? available : active?.items ?? [];
     const current = available.find((model) => model.value === draft) ?? null;
     const currentEntry = current ? entryOf(current) : undefined;
 
-    const body = <div className={styles.body}>
-        <aside className={styles.groups} role="tablist" aria-label="模型分组">
-            <button type="button" role="tab" aria-selected={false} className={styles.groupItem} data-active={group === "all"} onClick={() => setGroup("all")}>
-                <Sparkles size={14} /><span className="truncate">全部模型</span><em>{available.length}</em>
-            </button>
-            {sections.map((section) => <button key={section.key} type="button" role="tab" aria-selected={false} className={styles.groupItem} data-active={active?.key === section.key} onClick={() => setGroup(section.key)}>
-                <ChevronRight size={13} /><span className="truncate">{section.name}</span><em>{section.items.length}</em>
-            </button>)}
-        </aside>
-        <div className={styles.list}>
-            {loading ? <p className={styles.hint}>正在读取模型介绍…</p> : null}
-            {error ? <p className={styles.hint}>{error}（已回退到基础列表）</p> : null}
-            <div className={styles.cards}>
-                {items.map((model) => {
-                    const entry = entryOf(model);
-                    return <button key={model.value} type="button" className={styles.card} data-selected={model.value === draft} onClick={() => setDraft(model.value)}>
-                        <span className={styles.cardHead}>
-                            <ModelBrandIcon model={model.displayName} className="size-5" />
-                            <span className="min-w-0 flex-1 truncate text-left text-[13px] font-medium">{model.displayName}</span>
-                            {model.value === draft ? <Check size={14} className={styles.check} /> : null}
-                        </span>
-                        {entry?.badges?.length ? <span className={styles.badges}>{entry.badges.slice(0, 3).map((badge) => <Badge key={`${badge.key}-${badge.label}`} label={badge.label} tone={badge.tone} />)}</span> : null}
-                        <span className={styles.summary}>{entry?.summary || "暂无介绍"}</span>
-                        <span className={styles.price}>{billingLabel[model.billingMode] || ""} {formatMoney(model.unitPrice) === "0" ? "免费" : `¥${formatMoney(model.unitPrice)}`}</span>
-                    </button>;
-                })}
-            </div>
-            {!items.length && !loading ? <p className={styles.hint}>当前分类下没有可用模型</p> : null}
+    /** 滑块跟随选中项：位置与宽度都从 DOM 量出来，窗口缩放、数据变化后重新校准。 */
+    useLayoutEffect(() => {
+        const bar = barRef.current;
+        if (!bar) return;
+        let frame = 0;
+        const sync = () => {
+            const el = bar.querySelector<HTMLElement>('[data-active="true"]');
+            if (!el) return;
+            setThumb({ x: el.offsetLeft, width: el.offsetWidth, ready: true });
+            const start = el.offsetLeft;
+            const end = start + el.offsetWidth;
+            if (start < bar.scrollLeft) bar.scrollTo({ left: Math.max(start - 10, 0), behavior: "smooth" });
+            else if (end > bar.scrollLeft + bar.clientWidth) bar.scrollTo({ left: end - bar.clientWidth + 10, behavior: "smooth" });
+        };
+        frame = window.requestAnimationFrame(sync);
+        const observer = new ResizeObserver(sync);
+        observer.observe(bar);
+        window.addEventListener("resize", sync);
+        return () => { window.cancelAnimationFrame(frame); observer.disconnect(); window.removeEventListener("resize", sync); };
+    }, [group, chips.length, open, mobile, items.length]);
+
+    const body = <div className={styles.shell}>
+        <div className={styles.groupBar} role="tablist" aria-label="模型分组" ref={barRef}>
+            <span className={styles.groupThumb} data-ready={thumb.ready} style={{ width: thumb.width, transform: `translateX(${thumb.x}px)` }} aria-hidden="true" />
+            {chips.map((chip) => (
+                <button key={chip.key} type="button" role="tab" aria-selected={group === chip.key} data-active={group === chip.key} className={styles.groupChip} onClick={() => setGroup(chip.key)}>
+                    <span className="truncate">{chip.name}</span><em>{chip.count}</em>
+                </button>
+            ))}
         </div>
-        <section className={styles.detail} aria-label="模型介绍">
-            {current ? <>
-                <header className={styles.detailHead}>
-                    <ModelBrandIcon model={current.displayName} className="size-6" />
-                    <div className="min-w-0"><h4 className="truncate text-sm font-semibold">{current.displayName}</h4><p className="truncate text-[11px] text-muted-foreground">{currentEntry?.summary || current.modelName}</p></div>
-                </header>
-                {currentEntry?.badges?.length ? <div className={styles.badges}>{currentEntry.badges.map((badge) => <Badge key={`${badge.key}-${badge.label}`} label={badge.label} tone={badge.tone} />)}</div> : null}
-                <p className={styles.description}>{currentEntry?.description?.trim() || "这个模型还没有填写介绍。管理员可以在后台「模型介绍」里补充它的能力、适用场景与注意事项。"}</p>
-                <dl className={styles.specs}>
-                    <div><dt>计费</dt><dd>{billingLabel[current.billingMode] || current.billingMode} ¥{formatMoney(current.unitPrice)}</dd></div>
-                    {current.features?.resolutions?.length ? <div><dt>清晰度</dt><dd>{current.features.resolutions.join(" / ")}</dd></div> : null}
-                    {current.features?.videoResolutions?.length ? <div><dt>分辨率</dt><dd>{current.features.videoResolutions.map((item) => item === "2160" ? "4K" : `${item}p`).join(" / ")}</dd></div> : null}
-                    {current.features?.maxCount ? <div><dt>张数</dt><dd>最多 {current.features.maxCount} 张</dd></div> : null}
-                    {current.features?.maxSeconds ? <div><dt>时长</dt><dd>{current.features.minSeconds ?? 1}–{current.features.maxSeconds} 秒</dd></div> : null}
-                </dl>
-            </> : <p className={styles.hint}>左侧选择一个模型即可查看介绍</p>}
-        </section>
+        <div className={styles.body}>
+            <div className={styles.list}>
+                {loading ? <p className={styles.hint}>正在读取模型介绍…</p> : null}
+                {error ? <p className={styles.hint}>{error}（已回退到基础列表）</p> : null}
+                <div className={styles.cards}>
+                    {items.map((model) => {
+                        const entry = entryOf(model);
+                        return <button key={model.value} type="button" className={styles.card} data-selected={model.value === draft} onClick={() => setDraft(model.value)}>
+                            <span className={styles.cardHead}>
+                                <ModelBrandIcon model={model.displayName} className="size-5" />
+                                <span className="min-w-0 flex-1 truncate text-left text-[13px] font-medium">{model.displayName}</span>
+                                {model.value === draft ? <Check size={14} className={styles.check} /> : null}
+                            </span>
+                            {entry?.badges?.length ? <span className={styles.badges}>{entry.badges.slice(0, 3).map((badge) => <Badge key={`${badge.key}-${badge.label}`} label={badge.label} tone={badge.tone} />)}</span> : null}
+                            <span className={styles.summary}>{entry?.summary || "暂无介绍"}</span>
+                            <span className={styles.price}>{billingLabel[model.billingMode] || ""} {formatMoney(model.unitPrice) === "0" ? "免费" : `¥${formatMoney(model.unitPrice)}`}</span>
+                        </button>;
+                    })}
+                </div>
+                {!items.length && !loading ? <p className={styles.hint}>当前分类下没有可用模型</p> : null}
+            </div>
+            <section className={styles.detail} aria-label="模型介绍">
+                {current ? <>
+                    <header className={styles.detailHead}>
+                        <ModelBrandIcon model={current.displayName} className="size-6" />
+                        <div className="min-w-0"><h4 className="truncate text-sm font-semibold">{current.displayName}</h4><p className="truncate text-[11px] text-muted-foreground">{currentEntry?.summary || current.modelName}</p></div>
+                    </header>
+                    {currentEntry?.badges?.length ? <div className={styles.badges}>{currentEntry.badges.map((badge) => <Badge key={`${badge.key}-${badge.label}`} label={badge.label} tone={badge.tone} />)}</div> : null}
+                    <p className={styles.description}>{currentEntry?.description?.trim() || "这个模型还没有填写介绍。管理员可以在后台「模型介绍」里补充它的能力、适用场景与注意事项。"}</p>
+                    <dl className={styles.specs}>
+                        <div><dt>计费</dt><dd>{billingLabel[current.billingMode] || current.billingMode} ¥{formatMoney(current.unitPrice)}</dd></div>
+                        {current.features?.resolutions?.length ? <div><dt>清晰度</dt><dd>{current.features.resolutions.join(" / ")}</dd></div> : null}
+                        {current.features?.videoResolutions?.length ? <div><dt>分辨率</dt><dd>{current.features.videoResolutions.map((item) => item === "2160" ? "4K" : `${item}p`).join(" / ")}</dd></div> : null}
+                        {current.features?.maxCount ? <div><dt>张数</dt><dd>最多 {current.features.maxCount} 张</dd></div> : null}
+                        {current.features?.maxSeconds ? <div><dt>时长</dt><dd>{current.features.minSeconds ?? 1}–{current.features.maxSeconds} 秒</dd></div> : null}
+                    </dl>
+                </> : <p className={styles.hint}>选择一个模型即可查看介绍</p>}
+            </section>
+        </div>
     </div>;
 
     const footer = <div className={styles.footer}>
@@ -136,11 +166,11 @@ export function ModelPickerModal({ open, onClose, value, onChange, capability, m
     </div>;
 
     if (mobile) {
-        return <Drawer placement="bottom" height="88dvh" open={open} onClose={onClose} title="选择模型" styles={{ body: { padding: "10px 14px 14px", overflow: "hidden" } }} footer={footer}>
+        return <Drawer placement="bottom" height="88dvh" open={open} onClose={onClose} title="选择模型" styles={{ body: { padding: 0, overflow: "hidden" } }} footer={footer}>
             {body}
         </Drawer>;
     }
-    return <Modal open={open} onCancel={onClose} title="选择模型" width={920} footer={footer} centered styles={{ body: { padding: "4px 0 0" } }}>
+    return <Modal open={open} onCancel={onClose} title="选择模型" width={880} footer={footer} centered styles={{ body: { padding: 0 } }}>
         {body}
     </Modal>;
 }

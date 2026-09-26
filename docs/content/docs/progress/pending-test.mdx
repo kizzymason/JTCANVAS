@@ -307,3 +307,7 @@ The Chinese version contains the complete item-by-item acceptance checklist.
 - Works with no catalog configured: every model still appears under a fallback group with no badges, and the picker must not error or hide models.
 - Admin model catalog: creating a group with a duplicate `key` must be rejected with a conflict, a group with no name must be rejected by validation, and deleting a group must leave its models ungrouped rather than deleting them. Hidden groups and hidden model entries must disappear from `GET /api/models/catalog` while staying visible in the admin list.
 
+- Dark-mode overlays (modal, drawer, popover, dropdown, select) should all render as the same frosted-glass surface: translucent neutral charcoal, 26px backdrop blur, hairline `rgba(255,255,255,.09)` border and a soft wide shadow. Content behind must look blurred rather than sharp, and text inside must stay easily readable over bright images.
+- The model picker groups must sit as a sliding strip along the top of the dialog (not a left rail); the highlight must track the selected group exactly on switch, on window resize and after the model list changes, and scroll the active chip into view when the strip overflows.
+- The administrator area keeps its own theme: admin dialogs must not inherit the frontend glass surface or its backdrop blur.
+
