@@ -303,3 +303,7 @@ The Chinese version contains the complete item-by-item acceptance checklist.
 - Verify the initial production entry no longer includes the Agent/Streamdown, English translation, account-drawer, or asset-store modules; opening those features must still load them and keep Agent silent auto-connect and payment-return behavior intact.
 - The frontend primary should match reference lime `#C3FA55`; page/inner scrollbars should be thin, muted gray, and hidden at rest. Modal title, content and footer should have the same neutral charcoal background, with no green cast. Admin theme and scrollbars should remain unchanged.
 
+- Model picker should open as a centered modal on desktop and a bottom sheet on mobile, list models by the groups configured in the admin area, show badge labels (latest/recommended), the one-line summary and price on each card, and swap the right-hand description when another model is picked. Confirming applies the model and closes the dialog; cancelling changes nothing.
+- Works with no catalog configured: every model still appears under a fallback group with no badges, and the picker must not error or hide models.
+- Admin model catalog: creating a group with a duplicate `key` must be rejected with a conflict, a group with no name must be rejected by validation, and deleting a group must leave its models ungrouped rather than deleting them. Hidden groups and hidden model entries must disappear from `GET /api/models/catalog` while staying visible in the admin list.
+

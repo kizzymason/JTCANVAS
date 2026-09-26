@@ -29,6 +29,7 @@ import { VisitorsModule } from "./modules/visitors/visitors.module";
 import { WalletModule } from "./modules/wallet/wallet.module";
 import { PaymentsModule } from "./modules/payments/payments.module";
 import { AnnouncementsModule } from "./modules/announcements/announcements.module";
+import { ModelCatalogModule } from "./modules/model-catalog/model-catalog.module";
 import { CardsModule } from "./modules/cards/cards.module";
 import { OpenApiModule } from "./modules/openapi/openapi.module";
 import { ResellerModule } from "./modules/reseller/reseller.module";
@@ -77,6 +78,7 @@ import { HomepageModule } from "./modules/homepage/homepage.module";
         VisitorsModule,
         PaymentsModule,
         AnnouncementsModule,
+        ModelCatalogModule,
         HomepageModule,
         CardsModule,
         OpenApiModule,

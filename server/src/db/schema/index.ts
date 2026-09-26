@@ -11,3 +11,4 @@ export * from "./announcements";
 export * from "./openapi";
 export * from "./cards";
 export * from "./homepage";
+export * from "./model-catalog";

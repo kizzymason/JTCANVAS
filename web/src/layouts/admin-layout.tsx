@@ -1,5 +1,5 @@
 import { Button, Layout, Menu } from "antd";
-import { AppWindow, ArrowLeft, BarChart3, BookOpen, ClipboardList, CreditCard, Database, FileClock, Gauge, Handshake, KeyRound, Landmark, Layers, Megaphone, Package, Percent, ScrollText, Settings, Store, Ticket, Users } from "lucide-react";
+import { AppWindow, ArrowLeft, BarChart3, BookOpen, Sparkles, ClipboardList, CreditCard, Database, FileClock, Gauge, Handshake, KeyRound, Landmark, Layers, Megaphone, Package, Percent, ScrollText, Settings, Store, Ticket, Users } from "lucide-react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
@@ -51,6 +51,7 @@ const navGroups: Array<{ titleKey: string; items: AdminNavItem[] }> = [
         items: [
             { key: "homepage", path: "/admin/homepage", icon: AppWindow, labelKey: "admin.nav.homepage" },
             { key: "announcements", path: "/admin/announcements", icon: Megaphone, labelKey: "admin.nav.announcements" },
+            { key: "model-catalog", path: "/admin/model-catalog", icon: Sparkles, labelKey: "admin.nav.modelCatalog" },
             { key: "storage", path: "/admin/storage", icon: Database, labelKey: "admin.nav.storage" },
             { key: "services", path: "/admin/services", icon: AppWindow, labelKey: "admin.nav.services" },
             { key: "settings", path: "/admin/settings", icon: Settings, labelKey: "admin.nav.settings" },

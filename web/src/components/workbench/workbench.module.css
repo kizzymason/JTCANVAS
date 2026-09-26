@@ -94,3 +94,25 @@
 .outputRow:hover { border-color:var(--muted-foreground); }
 .outputRowIcon,.outputRowChevron { flex-shrink:0; color:var(--muted-foreground); }
 .outputRowValue { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:left; }
+
+/* 工作台的模型入口：点击打开模型选择弹窗（不再是下拉框）。 */
+.modelTrigger {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    height: 36px;
+    padding: 0 10px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: #17171a;
+    color: var(--foreground);
+    font-size: 13px;
+    cursor: pointer;
+    transition: border-color .12s ease;
+}
+
+.modelTrigger:hover { border-color: rgba(255, 255, 255, .2); }
+.modelTriggerName { flex: 1; min-width: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.modelTriggerHint { display: flex; align-items: center; gap: 3px; flex: none; font-size: 11px; color: var(--primary); }
+.modelTriggerArrow { flex: none; color: var(--muted-foreground); }

@@ -932,6 +932,7 @@ export default {
             services: "服务管理",
             settings: "站点设置",
             announcements: "公告管理",
+            modelCatalog: "模型介绍",
             audit: "审计日志",
             docs: "接口文档",
         },
