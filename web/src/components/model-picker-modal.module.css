@@ -152,12 +152,10 @@
     .detail { border-left: 0; border-top: 1px solid var(--modal-line, var(--border)); padding: 14px 12px 16px; background: transparent; }
 }
 
-/* 亮色模式下标识（最新 / 推荐 / 新上线…）改用深色底 + 浅色字，
-   否则浅色底配浅色字几乎看不见。文字色仍按各标识的色调区分。 */
-html:not(.dark) .badge {
-    color: #f2f2f3;
-    background: rgba(17, 17, 17, .92);
-}
-html:not(.dark) .badge[data-tone="primary"] { color: #c3fa55; }
-html:not(.dark) .badge[data-tone="warning"] { color: #ffcca7; }
-html:not(.dark) .badge[data-tone="neutral"] { color: #f2f2f3; }
+/* 亮色模式下标识改为「各色调实底 + 白字」；暗色模式保持原来的浅色底 + 色调文字。
+   注意：这是 CSS Module，:not(.dark) 里的 .dark 会被当成局部类名哈希掉、选择器永远成立，
+   必须用 :global() 包住 html:not(.dark)，否则暗色模式也会被改到。 */
+:global(html:not(.dark)) .badge { color: #fff; background: #6b7280; }
+:global(html:not(.dark)) .badge[data-tone="primary"] { color: #fff; background: #c3fa55; }
+:global(html:not(.dark)) .badge[data-tone="warning"] { color: #fff; background: #f2913d; }
+:global(html:not(.dark)) .badge[data-tone="neutral"] { color: #fff; background: #6b7280; }
