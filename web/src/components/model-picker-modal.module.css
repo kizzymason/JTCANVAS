@@ -155,7 +155,10 @@
 /* 亮色模式下标识改为「各色调实底 + 白字」；暗色模式保持原来的浅色底 + 色调文字。
    注意：这是 CSS Module，:not(.dark) 里的 .dark 会被当成局部类名哈希掉、选择器永远成立，
    必须用 :global() 包住 html:not(.dark)，否则暗色模式也会被改到。 */
+/* 亮色模式：各色调实底 + 深色字。白字压在这几个亮色底色上对比度只有 1.6–2.4:1，读不清；
+   深色字后强调色约 15:1、提醒色约 8:1、普通色约 4.8:1，均达到可读标准，且保留品牌色底。 */
 :global(html:not(.dark)) .badge { color: #fff; background: #6b7280; }
-:global(html:not(.dark)) .badge[data-tone="primary"] { color: #fff; background: #c3fa55; }
-:global(html:not(.dark)) .badge[data-tone="warning"] { color: #fff; background: #f2913d; }
+:global(html:not(.dark)) .badge[data-tone="primary"] { color: #111213; background: #c3fa55; }
+:global(html:not(.dark)) .badge[data-tone="warning"] { color: #111213; background: #f2913d; }
+/* 普通色底偏深，白字 4.83:1 比深色字 3.88:1 更好，这条保留白字。 */
 :global(html:not(.dark)) .badge[data-tone="neutral"] { color: #fff; background: #6b7280; }
