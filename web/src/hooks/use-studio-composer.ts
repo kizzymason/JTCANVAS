@@ -22,7 +22,6 @@ export function useStudioComposer(kind: StudioKind) {
     const config = useEffectiveConfig();
     const update = useConfigStore((state) => state.updateConfig);
     const [prompt, setPrompt] = useState("");
-    const [batch, setBatch] = useState(false);
     const [references, setReferences] = useState<ReferenceImage[]>([]);
     const [uploading, setUploading] = useState(false);
     const [submitting, setSubmitting] = useState(false);
@@ -32,7 +31,8 @@ export function useStudioComposer(kind: StudioKind) {
     const found = models.find((item) => item.capability === kind && item.value === model);
     const features = modelFeaturesOf(found);
     useShowcasePrompt(kind, setPrompt);
-    const prompts = batch ? prompt.split(/\r?\n\s*\r?\n/).map((value) => value.trim()).filter(Boolean) : [prompt.trim()].filter(Boolean);
+    // 一次提交就是一个任务；需要多个任务时再点一次生成即可。
+    const prompts = [prompt.trim()].filter(Boolean);
     const priceInput = {
         count: kind === "image" ? Math.max(1, Number(config.count) || 1) : 1,
         seconds: kind === "video" ? Number(config.videoSeconds) : undefined,
@@ -40,7 +40,7 @@ export function useStudioComposer(kind: StudioKind) {
         referenceCount: references.length,
         taskCount: Math.max(1, prompts.length),
     };
-    const { affordable } = useCanAffordGeneration(model, priceInput);
+    const { amount, affordable } = useCanAffordGeneration(model, priceInput);
 
     useEffect(() => {
         if (found) return;
@@ -140,5 +140,5 @@ export function useStudioComposer(kind: StudioKind) {
             id: nanoid(), name: `参考图 ${index + 1}`, type: "image/png", dataUrl: /^https?:\/\//.test(key) ? key : fileUrl(key), ...(/^https?:\/\//.test(key) ? {} : { storageKey: key }),
         })) : []);
     };
-    return { prompt, setPrompt, batch, setBatch, references, setReferences, setUploading, submitting, uploading, generate, reuse, model, priceInput, affordable, taskCount: prompts.length };
+    return { prompt, setPrompt, references, setReferences, setUploading, submitting, uploading, generate, reuse, model, priceInput, amount, affordable, taskCount: prompts.length };
 }

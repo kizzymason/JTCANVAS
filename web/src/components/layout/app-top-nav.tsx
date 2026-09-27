@@ -21,6 +21,25 @@ export function AppTopNav() {
     const [params, setParams] = useSearchParams();
     const [mobileOpen, setMobileOpen] = useState(false);
     const autoConnectRef = useRef(false);
+
+    /**
+     * 偏好设置与账户面板都是按需加载的代码块。若等点击后才加载，会先渲染 Suspense 里的
+     * 「正在打开…」占位、加载完再滑出真正的面板，看起来像同一段动画播了两次。
+     * 首屏空闲时先把这两块代码取回来，点击时就只有一次滑出动画。
+     */
+    useEffect(() => {
+        const preload = () => {
+            void import("@/components/layout/app-config-modal");
+            void import("@/components/account/account-drawer");
+        };
+        const idle = (window as unknown as { requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number }).requestIdleCallback;
+        if (typeof idle === "function") {
+            const id = idle(preload, { timeout: 2500 });
+            return () => (window as unknown as { cancelIdleCallback?: (handle: number) => void }).cancelIdleCallback?.(id);
+        }
+        const timer = window.setTimeout(preload, 1800);
+        return () => window.clearTimeout(timer);
+    }, []);
     const token = useAgentStore((s) => s.token);
     const enabled = useAgentStore((s) => s.enabled);
     const connected = useAgentStore((s) => s.connected);
@@ -57,7 +76,7 @@ export function AppTopNav() {
             </div>
         </header> : null}
         <Drawer open={mobileOpen} onClose={() => setMobileOpen(false)} placement="left" size={260} styles={{ body: { padding: 0 } }}><AppSidebar mobile onNavigate={() => setMobileOpen(false)} /></Drawer>
-        {isConfigOpen ? <Suspense fallback={<div className="fixed inset-y-0 right-0 z-[1050] grid w-[min(520px,100vw)] place-items-center border-l border-border bg-background text-sm text-muted-foreground" role="status">正在打开偏好设置…</div>}><AppConfigModal /></Suspense> : null}
-        {accountOpen || params.get("recharge") === "1" ? <Suspense fallback={<div className="fixed inset-y-0 right-0 z-[1050] grid w-[min(420px,100vw)] place-items-center border-l border-border bg-background text-sm text-muted-foreground" role="status">正在打开账户…</div>}><AccountDrawer /></Suspense> : null}
+        {isConfigOpen ? <Suspense fallback={null}><AppConfigModal /></Suspense> : null}
+        {accountOpen || params.get("recharge") === "1" ? <Suspense fallback={null}><AccountDrawer /></Suspense> : null}
     </>;
 }

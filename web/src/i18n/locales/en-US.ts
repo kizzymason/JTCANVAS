@@ -947,6 +947,7 @@ export default {
             services: "Services",
             settings: "Site settings",
             announcements: "Announcements",
+            modelCatalog: "Model Catalog",
             audit: "Audit log",
             docs: "API docs",
         },

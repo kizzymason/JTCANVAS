@@ -35,6 +35,7 @@ const AdminAuditPage = lazy(() => import("@/pages/admin/audit"));
 const AdminHomepagePage = lazy(() => import("@/pages/admin/homepage"));
 const AdminSettingsPage = lazy(() => import("@/pages/admin/settings"));
 const AdminAnnouncementsPage = lazy(() => import("@/pages/admin/announcements"));
+const AdminModelCatalogPage = lazy(() => import("@/pages/admin/model-catalog"));
 const AdminDocsPage = lazy(() => import("@/pages/admin/docs"));
 const AdminResellersPage = lazy(() => import("@/pages/admin/resellers"));
 const AdminResellerTiersPage = lazy(() => import("@/pages/admin/reseller-tiers"));
@@ -386,6 +387,14 @@ export const router = createBrowserRouter([
                         element: (
                             <Lazy>
                                 <AdminAnnouncementsPage />
+                            </Lazy>
+                        ),
+                    },
+                    {
+                        path: "model-catalog",
+                        element: (
+                            <Lazy>
+                                <AdminModelCatalogPage />
                             </Lazy>
                         ),
                     },

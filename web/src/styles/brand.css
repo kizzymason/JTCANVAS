@@ -5,7 +5,7 @@ html.gravity {
 
 html.gravity.dark {
     --background: #090b0d; --foreground: #f5f7fa; --card: #14171a; --card-foreground: #f5f7fa;
-    --popover: #1b1f23; --elevated: #1b1f23; --popover-foreground: #f5f7fa; --primary: #c3fa55; --primary-foreground: #090b0d;
+    --popover: #1c1e21; --elevated: #1c1e21; --popover-foreground: #f5f7fa; --primary: #c3fa55; --primary-foreground: #090b0d;
     --secondary: #1b1f23; --secondary-foreground: #f5f7fa; --muted: #14171a; --muted-foreground: #969fa6;
     --accent: #24282c; --accent-foreground: #c3fa55; --border: #2c3136; --input: #2c3136; --ring: #c3fa55;
     --sidebar: #090b0d; --sidebar-foreground: #f5f7fa; --sidebar-primary: #c3fa55; --sidebar-primary-foreground: #090b0d;
@@ -14,6 +14,13 @@ html.gravity.dark {
     --color-stone-600: #6d777f; --color-stone-500: #89939b; --color-stone-400: #969fa6; --color-stone-300: #c9ced3;
     --color-stone-200: #dce1e5; --color-stone-100: #f5f7fa; --color-stone-50: #fafbfc;
     --brand-info-bg: #181c20; --brand-info-border: #30363c;
+    /* 弹层（模态框 / 抽屉 / 气泡）：中性近黑玻璃面，参照 versein 的中性色阶（#0f0f11 / #17171a / #1f1f23） */
+    --modal-surface: rgba(19, 19, 22, .80); --modal-glass: rgba(31, 31, 35, .82);
+    --modal-veil: linear-gradient(180deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, 0) 150px);
+    --modal-blur: saturate(150%) blur(26px); --modal-inset: rgba(255, 255, 255, .035);
+    --modal-line: rgba(255, 255, 255, .09); --modal-mask: rgba(6, 6, 8, .52);
+    --modal-shadow: 0 16px 48px rgba(0, 0, 0, .62), inset 0 1px 0 rgba(255, 255, 255, .06);
+    --modal-radius: 14px;
 }
 
 html.gravity:not(.dark) {
@@ -27,6 +34,12 @@ html.gravity:not(.dark) {
     --color-stone-600: #525252; --color-stone-500: #737373; --color-stone-400: #8a8a8a; --color-stone-300: #a3a3a3;
     --color-stone-200: #d4d4d4; --color-stone-100: #f5f5f5; --color-stone-50: #fafafa;
     --brand-info-bg: #f5f6f7; --brand-info-border: #e3e6ea;
+    --modal-surface: rgba(255, 255, 255, .82); --modal-glass: rgba(255, 255, 255, .84);
+    --modal-veil: linear-gradient(180deg, rgba(255, 255, 255, .6), rgba(255, 255, 255, 0) 150px);
+    --modal-blur: saturate(140%) blur(24px); --modal-inset: rgba(17, 17, 17, .03);
+    --modal-line: rgba(17, 17, 17, .09); --modal-mask: rgba(17, 17, 17, .28);
+    --modal-shadow: 0 16px 44px rgba(17, 17, 17, .22), inset 0 1px 0 rgba(255, 255, 255, .9);
+    --modal-radius: 14px;
 }
 
 .gravity :focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
@@ -34,10 +47,60 @@ html.gravity:not(.dark) {
 .gravity .text-primary-foreground { color: var(--primary-foreground); }
 .gravity .ant-btn { font-weight: 500; }
 .gravity .ant-modal-title, .gravity .ant-drawer-title { letter-spacing: .02em; }
-.gravity .ant-modal .ant-modal-content,
+.gravity .ant-modal .ant-modal-container,
+.gravity .ant-modal .ant-modal-content {
+    background-color: var(--modal-surface);
+    background-image: var(--modal-veil);
+    -webkit-backdrop-filter: var(--modal-blur);
+    backdrop-filter: var(--modal-blur);
+    border: 1px solid var(--modal-line);
+    border-radius: var(--modal-radius);
+    box-shadow: var(--modal-shadow);
+    overflow: hidden;
+}
 .gravity .ant-modal .ant-modal-header,
 .gravity .ant-modal .ant-modal-body,
-.gravity .ant-modal .ant-modal-footer { background-color: var(--card); }
+.gravity .ant-modal .ant-modal-footer { background: transparent; }
+.gravity .ant-modal .ant-modal-header { margin-bottom: 0; padding: 15px 20px; border-bottom: 1px solid var(--modal-line); }
+.gravity .ant-modal .ant-modal-footer { margin-top: 0; padding: 13px 20px; border-top: 1px solid var(--modal-line); }
+.gravity .ant-modal .ant-modal-title { font-size: 15px; font-weight: 600; }
+.gravity .ant-modal .ant-modal-close { top: 13px; inset-inline-end: 13px; }
+.gravity .ant-modal-mask { background: var(--modal-mask); -webkit-backdrop-filter: blur(9px) saturate(.95); backdrop-filter: blur(9px) saturate(.95); }
+.gravity .ant-modal-wrap { scrollbar-width: thin; }
+/* 抽屉与气泡用同一套面，保证移动端底部弹出与桌面下拉观感一致 */
+.gravity .ant-drawer .ant-drawer-section,
+.gravity .ant-drawer .ant-drawer-content {
+    background-color: var(--modal-surface);
+    background-image: var(--modal-veil);
+    -webkit-backdrop-filter: var(--modal-blur);
+    backdrop-filter: var(--modal-blur);
+    border: 1px solid var(--modal-line);
+    box-shadow: var(--modal-shadow);
+}
+.gravity .ant-drawer-mask { background: var(--modal-mask); -webkit-backdrop-filter: blur(9px); backdrop-filter: blur(9px); }
+.gravity .ant-drawer .ant-drawer-header,
+.gravity .ant-drawer .ant-drawer-footer { background: transparent; border-color: var(--modal-line); }
+/* antd v6 把浮层容器统一改名（popover-container / modal-container / drawer-section），
+   这里同时兼容 v6 与旧类名，避免样式静默失效。 */
+.gravity .ant-popover .ant-popover-container,
+.gravity .ant-popover .ant-popover-inner,
+.gravity .ant-dropdown .ant-dropdown-menu,
+.gravity .ant-dropdown .ant-dropdown-container,
+.gravity .ant-select .ant-select-container,
+.gravity .ant-select-dropdown,
+.gravity .ant-picker-dropdown .ant-picker-panel-container,
+.gravity .ant-picker-dropdown .ant-picker-container {
+    background-color: var(--modal-glass);
+    -webkit-backdrop-filter: var(--modal-blur);
+    backdrop-filter: var(--modal-blur);
+    border: 1px solid var(--modal-line);
+    border-radius: 12px;
+    box-shadow: var(--modal-shadow);
+    overflow: hidden;
+}
+/* 弹窗内的嵌套面板统一用提亮面，避免内部区块再次压成死黑 */
+.gravity .ant-modal .ant-table,
+.gravity .ant-modal .ant-table-container { background: transparent; }
 .gravity .ant-input::placeholder, .gravity textarea::placeholder { color: var(--muted-foreground); }
 .gravity .ant-image { max-width: 100%; }
 .gravity .ant-alert-info { background: var(--brand-info-bg); border-color: var(--brand-info-border); }
