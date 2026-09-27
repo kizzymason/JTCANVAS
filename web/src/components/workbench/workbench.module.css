@@ -85,6 +85,9 @@
 @media(prefers-reduced-motion:reduce) { .spinner { animation:none; } }
 
 .outputPanel { width:560px; font-size:13px; line-height:1.4; }
+/* 视频输出面板原本约 454px 高，矮一点的窗口会被顶到浏览器上沿之外；把比例示意卡片与输入行压低约 40px。 */
+.outputPanel [class*="h-[78px]"] { height:54px; }
+.outputPanel [class*="h-9"] { height:32px; }
 .outputPanel [class*="grid-cols-4"] { grid-template-columns:repeat(6,minmax(0,1fr)); }
 .outputSheet { width:100%; font-size:13px; line-height:1.4; }
 .outputSheet [class*="grid-cols-4"] { grid-template-columns:repeat(3,minmax(0,1fr)); }
