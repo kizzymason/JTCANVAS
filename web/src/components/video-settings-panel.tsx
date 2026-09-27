@@ -102,11 +102,6 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
                             >
                                 <SizePreview width={preview.width} height={preview.height} color={theme.node.text} />
                                 <span>{item.label || item.ratio}</span>
-                                {item.ratio === "auto" || !preview.width ? null : (
-                                    <span className="text-[11px] leading-none opacity-55">
-                                        {preview.width}x{preview.height}
-                                    </span>
-                                )}
                             </button>
                             );
                         })}

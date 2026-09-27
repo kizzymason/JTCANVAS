@@ -154,11 +154,6 @@ export function ImageSettingsPanel({ config, onConfigChange, theme, showTitle = 
                             >
                                 <AspectIcon type={item.ratio === "auto" ? "auto" : "box"} width={preview.width} height={preview.height} color={theme.node.text} />
                                 <span>{item.label || item.ratio}</span>
-                                {item.ratio === "auto" || !preview.width ? null : (
-                                    <span className="text-[11px] leading-none opacity-55">
-                                        {preview.width}x{preview.height}
-                                    </span>
-                                )}
                             </button>
                             );
                         })}
