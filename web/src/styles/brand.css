@@ -106,3 +106,12 @@ html.gravity:not(.dark) {
 .gravity .ant-alert-info { background: var(--brand-info-bg); border-color: var(--brand-info-border); }
 .gravity .ant-alert-info :is(.ant-alert-title,.ant-alert-description,.ant-alert-icon) { color: var(--foreground); }
 @media (prefers-reduced-motion: reduce) { .gravity *, .gravity *::before, .gravity *::after { scroll-behavior: auto !important; } }
+
+/**
+ * 暗色模式下禁用状态的主按钮（生成图片 / 生成视频）会带上 antd 的蓝灰边框，
+ * 与页面里其他禁用控件不一致；统一改成浅白色细边。亮色模式保持原样。
+ */
+html.dark .gravity :is(.ant-btn-primary, .ant-btn-color-primary):disabled,
+html.dark .gravity :is(.ant-btn-primary, .ant-btn-color-primary).ant-btn-disabled {
+    border-color: rgba(255, 255, 255, .16);
+}

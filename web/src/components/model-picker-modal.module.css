@@ -151,3 +151,13 @@
     .list { padding: 12px 12px 14px; }
     .detail { border-left: 0; border-top: 1px solid var(--modal-line, var(--border)); padding: 14px 12px 16px; background: transparent; }
 }
+
+/* 亮色模式下标识（最新 / 推荐 / 新上线…）改用深色底 + 浅色字，
+   否则浅色底配浅色字几乎看不见。文字色仍按各标识的色调区分。 */
+html:not(.dark) .badge {
+    color: #f2f2f3;
+    background: rgba(17, 17, 17, .92);
+}
+html:not(.dark) .badge[data-tone="primary"] { color: #c3fa55; }
+html:not(.dark) .badge[data-tone="warning"] { color: #ffcca7; }
+html:not(.dark) .badge[data-tone="neutral"] { color: #f2f2f3; }

@@ -50,7 +50,6 @@ export function StudioSettings({ kind }: { kind: StudioKind }) {
             >
                 <ModelBrandIcon model={current?.displayName || model} className="size-4" />
                 <span className={styles.modelTriggerName}>{current?.displayName || model || "选择模型"}</span>
-                <span className={styles.modelTriggerHint}><Sparkles size={12} />模型介绍</span>
                 <ChevronRight size={14} className={styles.modelTriggerArrow} />
             </button>
         </div>
