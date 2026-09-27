@@ -1,6 +1,6 @@
 import { Drawer, Popover } from "antd";
 import { ChevronDown, SlidersHorizontal } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ImageSettingsPanel, imageQualityLabel, imageSizeLabel } from "@/components/image-settings-panel";
 import { VideoSettingsPanel, videoResolutionLabel, videoSecondsLabel, videoSizeLabel } from "@/components/video-settings-panel";
@@ -33,10 +33,56 @@ export function StudioOutputRow({ kind }: { kind: StudioKind }) {
         return () => query.removeEventListener("change", sync);
     }, []);
 
+    const triggerRef = useRef<HTMLButtonElement | null>(null);
+    const [placement, setPlacement] = useState<"topLeft" | "bottomLeft">("topLeft");
+    const [room, setRoom] = useState(0);
+
+    /**
+     * 输出面板在视频工作台有 450px 左右高。若一律向上弹，窗口不够高时顶部会跑到浏览器上沿之外，
+     * 把最上面的 480P / 720P / 1080P 分辨率选择切掉。打开前先量一下触发按钮上下各有多少空间，
+     * 选空间更大的一侧，并把面板最大高度限制在该侧可用高度内（放不下时才内部滚动）。
+     */
+    const measure = useCallback(() => {
+        const el = triggerRef.current;
+        if (!el) return;
+        const rect = el.getBoundingClientRect();
+        const below = window.innerHeight - rect.bottom - 14;
+        const above = rect.top - 14;
+        const next = above > below ? "topLeft" : "bottomLeft";
+        setPlacement(next);
+        setRoom(Math.max(240, Math.floor(next === "topLeft" ? above : below)));
+    }, []);
+
+    /**
+     * antd 在上下空间不足时会把浮层整体上推，可能直接推出视口（外层还是 overflow:hidden，
+     * 于是最上面的清晰度选择被切掉）。渲染后按实际矩形把它拉回视口内。
+     * 注意：antd 写的内联 top 是 "auto"，直接 parseFloat 会得到 NaN、赋值被忽略，必须按矩形差值来算。
+     */
+    const clampPopup = useCallback(() => {
+        const pop = document.querySelector<HTMLElement>(".ant-popover:not(.ant-popover-hidden)");
+        if (!pop) return;
+        const margin = 10;
+        const rect = pop.getBoundingClientRect();
+        if (rect.top >= margin && rect.bottom <= window.innerHeight - margin) return;
+        const delta = rect.top < margin ? margin - rect.top : window.innerHeight - margin - rect.bottom;
+        const current = Number.parseFloat(pop.style.top);
+        const base = Number.isFinite(current) ? current : rect.top + window.scrollY;
+        pop.style.top = `${base + delta}px`;
+    }, []);
+
+    useEffect(() => {
+        if (!open) return;
+        measure();
+        const timers = [0, 80, 240, 600].map((delay) => window.setTimeout(clampPopup, delay));
+        const onResize = () => { measure(); clampPopup(); };
+        window.addEventListener("resize", onResize);
+        return () => { timers.forEach((timer) => window.clearTimeout(timer)); window.removeEventListener("resize", onResize); };
+    }, [open, measure, clampPopup]);
+
     const panel = kind === "image"
         ? <ImageSettingsPanel config={config} onConfigChange={update} theme={theme} showTitle={false} className={mobile ? styles.outputSheet : styles.outputPanel} modelValue={model} />
         : <VideoSettingsPanel config={config} onConfigChange={update} theme={theme} showTitle={false} className={mobile ? styles.outputSheet : styles.outputPanel} modelValue={model} />;
-    const trigger = <button type="button" className={styles.outputRow} aria-label={`输出设置：${summary}`} onClick={() => setOpen(true)}>
+    const trigger = <button ref={triggerRef} type="button" className={styles.outputRow} aria-label={`输出设置：${summary}`} onClick={() => { measure(); setOpen(true); }}>
         <SlidersHorizontal size={14} className={styles.outputRowIcon} />
         <span className={styles.outputRowValue}>{summary}</span>
         <ChevronDown size={15} className={styles.outputRowChevron} />
@@ -50,7 +96,9 @@ export function StudioOutputRow({ kind }: { kind: StudioKind }) {
                 styles={{ body: { padding: "10px 14px 16px" }, wrapper: { maxHeight: "86dvh" } }}>
                 {panel}
             </Drawer>
-        </> : <Popover trigger="click" placement="bottomLeft" arrow={false} styles={{ body: { padding: "12px 12px 13px" } }} content={panel}>
+        </> : <Popover trigger="click" placement={placement} arrow={false}
+            autoAdjustOverflow={{ adjustX: 1, adjustY: 0 }}
+            styles={{ body: { padding: "12px 12px 13px", maxHeight: room || undefined, overflowY: "auto" } }} content={panel}>
             {trigger}
         </Popover>}
     </div>;
