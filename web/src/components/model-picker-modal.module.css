@@ -82,7 +82,7 @@
     transition: border-color .15s ease, background-color .15s ease;
 }
 
-.card:hover { border-color: rgba(255, 255, 255, .22); }
+.card:hover { border-color: color-mix(in srgb, var(--foreground) 25%, transparent); }
 .card[data-selected="true"] { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 8%, transparent); }
 
 .cardHead { display: flex; align-items: center; gap: 7px; }
@@ -99,7 +99,7 @@
 
 .badge[data-tone="primary"] { color: var(--primary); background: rgba(195, 250, 85, .14); }
 .badge[data-tone="warning"] { color: #ffcca7; background: rgba(255, 174, 104, .16); }
-.badge[data-tone="neutral"] { color: var(--muted-foreground); background: rgba(255, 255, 255, .07); }
+.badge[data-tone="neutral"] { color: var(--muted-foreground); background: var(--modal-inset, rgba(127, 127, 127, .12)); }
 
 .summary {
     font-size: 11px;
@@ -120,7 +120,7 @@
     padding: 16px;
     overflow-y: auto;
     border-left: 1px solid var(--modal-line, var(--border));
-    background: rgba(255, 255, 255, .02);
+    background: var(--modal-inset, rgba(127, 127, 127, .06));
     scrollbar-gutter: stable;
 }
 

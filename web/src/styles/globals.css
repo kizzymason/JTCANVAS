@@ -794,3 +794,13 @@ html.gravity .is-scrolling::-webkit-scrollbar-thumb {
     padding-left: 0.85em;
     color: #57534e;
 }
+
+/* 亮色模式下表单控件与浮层的边框需要更实一些，否则在浅色背景上几乎看不见。
+   只作用于亮色：后台与前台共用，画布编辑器不受影响（它自带配色）。 */
+/* antd v6 把下拉框的边框从 .ant-select-selector 移到了 .ant-select 本身，两个类名都写上，避免以后升版回退。 */
+html:not(.dark) :is(.ant-select, .ant-select-selector, .ant-select-outlined, .ant-input, .ant-input-outlined, .ant-input-affix-wrapper, .ant-input-number, .ant-picker, .ant-cascader, .ant-tree-select) {
+    border-color: rgba(17, 17, 17, .45);
+}
+html:not(.dark) :is(.ant-select-dropdown, .ant-select-container, .ant-dropdown-menu, .ant-popover-container, .ant-picker-dropdown .ant-picker-panel-container) {
+    border-color: rgba(17, 17, 17, .45);
+}
