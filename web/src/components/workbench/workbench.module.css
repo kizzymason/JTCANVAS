@@ -114,5 +114,4 @@
 
 .modelTrigger:hover { border-color: color-mix(in srgb, var(--foreground) 25%, transparent); }
 .modelTriggerName { flex: 1; min-width: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.modelTriggerHint { display: flex; align-items: center; gap: 3px; flex: none; font-size: 11px; color: var(--primary); }
 .modelTriggerArrow { flex: none; color: var(--muted-foreground); }
