@@ -13,6 +13,14 @@ import { useAuthStore } from "@/stores/use-auth-store";
 type RechargeMode = "recharge" | "redeem";
 
 /**
+ * 手机点这个链接可以直接唤起支付宝扫一扫并打开收款码（上游收银台页面用的就是同一个 scheme）。
+ * 静态收款码本身带不了金额，所以金额仍要在支付宝里输入——弹窗里提供了「复制金额」避免输错。
+ */
+function alipayScheme(qrContent: string) {
+    return `alipays://platformapi/startapp?saId=10000007&clientVersion=3.7.0.0718&qrcode=${encodeURIComponent(qrContent)}`;
+}
+
+/**
  * Centered over the wallet drawer. Online top-up talks to the billed server; the gateway QR/cashier
  * stays in this modal while the client polls the order until it is paid.
  */
@@ -142,24 +150,64 @@ function OnlineRechargeForm({ active, onSuccess }: { active: boolean; onSuccess:
 
     if (checkout) {
         // 网关给的 qrcode 有两种形态：图片地址（易支付常见），以及「二维码内容」本身——
-        // 码支付类渠道（云启）返回的就是支付宝二维码链接（如 https://qr.alipay.com/xxx），
+        // 码支付类渠道（云启）返回的就是支付宝收款码链接（如 https://qr.alipay.com/xxx），
         // 这种必须由前端自己画成二维码才能扫，直接塞进 img src 会是一张破图。
         const qrImage = checkout.img || (checkout.qrcode.startsWith("http") && /\.(png|jpg|jpeg|gif|webp)(\?|$)/i.test(checkout.qrcode) ? checkout.qrcode : "");
         const qrValue = qrImage ? "" : checkout.qrcode.trim();
+        // 这类收款码是静态的，金额要在支付宝里手动输入，上游应付金额还可能带小数位（下单 0.02 要付 0.03），
+        // 所以金额放大显示 + 一键复制，避免手输错导致对不上账。
+        const copyAmount = async () => {
+            const text = formatMoney(checkout.amount);
+            try {
+                if (navigator.clipboard?.writeText) {
+                    await navigator.clipboard.writeText(text);
+                } else {
+                    // 非安全上下文（内网 http 预览、老浏览器）没有 clipboard API，退回旧办法。
+                    const holder = document.createElement("textarea");
+                    holder.value = text;
+                    holder.style.position = "fixed";
+                    holder.style.opacity = "0";
+                    document.body.append(holder);
+                    holder.select();
+                    document.execCommand("copy");
+                    holder.remove();
+                }
+                message.success(t("account.amountCopied"));
+            } catch {
+                message.warning(t("account.copyFailed"));
+            }
+        };
         return (
             <div className="flex flex-col items-center gap-3 py-2 text-center">
                 <p className="text-sm font-medium">{t("account.waitingPayment")}</p>
-                <p className="text-xs text-stone-500">{t("account.payAmountHint", { paid: formatMoney(checkout.amount), credit: formatMoney(checkout.creditAmount) })}</p>
                 {qrImage ? <img src={qrImage} alt={t("account.scanQr")} className="size-48 rounded-md bg-white p-2" /> : null}
                 {qrValue ? (
                     <div className="rounded-md bg-white p-2" role="img" aria-label={t("account.scanQr")}>
                         <QRCodeSVG value={qrValue} size={176} level="M" />
                     </div>
                 ) : null}
-                {qrImage || qrValue ? <p className="text-xs text-stone-500">{t("account.scanQr")}</p> : null}
-                <Button type="primary" href={checkout.payUrl} target="_blank" rel="noreferrer">
-                    {t("account.openCashier")}
-                </Button>
+                {qrImage || qrValue ? (
+                    <>
+                        <div className="flex items-center gap-2 rounded-md border border-stone-200 px-3 py-2 dark:border-stone-700">
+                            <span className="text-xs text-stone-500">{t("account.amountToPay")}</span>
+                            <span className="text-lg font-semibold tabular-nums">{formatMoney(checkout.amount)}</span>
+                            <Button size="small" onClick={copyAmount}>
+                                {t("account.copyAmount")}
+                            </Button>
+                        </div>
+                        <p className="text-xs text-stone-500">{t("account.enterAmountHint")}</p>
+                        <p className="text-xs text-stone-500">{t("account.payAmountHint", { paid: formatMoney(checkout.amount), credit: formatMoney(checkout.creditAmount) })}</p>
+                        {qrValue ? (
+                            <Button type="link" size="small" href={alipayScheme(qrValue)}>
+                                {t("account.openInAlipay")}
+                            </Button>
+                        ) : null}
+                    </>
+                ) : (
+                    <Button type="primary" href={checkout.payUrl} target="_blank" rel="noreferrer">
+                        {t("account.openCashier")}
+                    </Button>
+                )}
                 <Button type="text" onClick={() => setCheckout(null)}>
                     {t("account.chooseAgain")}
                 </Button>

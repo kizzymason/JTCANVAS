@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { resolvePayableAmount } from "./payment-gateway";
-import { buildConsoleUrl, normalizeGatewayMoney, resolveCheckoutLinks, yqpayMapiParams } from "./yqpay.adapter";
+import { buildConsoleUrl, normalizeGatewayMoney, parseConsoleAmount, resolveCheckoutLinks, yqpayMapiParams } from "./yqpay.adapter";
 
 const GATEWAY = "https://ypay.yunqi.ink";
 const PAGE = `${GATEWAY}/submit.php?pid=1000&sign=abc`;
@@ -32,6 +32,24 @@ describe("mapi.php 下单参数", () => {
         const params = yqpayMapiParams({ ...MAPI_INPUT, cid: "", param: "" });
         expect("cid" in params).toBe(false);
         expect("param" in params).toBe(false);
+    });
+});
+
+describe("收银台应付金额解析", () => {
+    // 实测页面片段：下单 0.02，收银台显示 0.03（上游按小数位区分并发订单）、并自带「复制金额」按钮。
+    const REAL_PAGE = `<p class="money" id="price" style="font-weight:bold; color:green"> 0.03 <button id='copy' class="layui-btn layui-btn-default copy" data-clipboard-text="0.03">复制金额</button></p>`;
+
+    it("优先取复制按钮上的金额（才是用户真正要付、回调也只认的数）", () => {
+        expect(parseConsoleAmount(REAL_PAGE)).toBe("0.03");
+    });
+
+    it("没有复制按钮时退回 id=price 的文本", () => {
+        expect(parseConsoleAmount('<p class="money" id="price"> 12.34 </p>')).toBe("12.34");
+    });
+
+    it("抓不到就返回空串，由订单原金额兜底（绝不影响下单）", () => {
+        expect(parseConsoleAmount("<html><body>订单已超时</body></html>")).toBe("");
+        expect(parseConsoleAmount("")).toBe("");
     });
 });
 
