@@ -7,7 +7,11 @@ import { useTranslation } from "react-i18next";
 import { ApiError } from "@/services/api/client";
 import { adminApi, type AdminPaymentChannel } from "@/services/api/admin";
 
-const DRIVER_OPTIONS = [{ value: "epay", label: "易支付 / Z-Pay" }];
+const DRIVER_OPTIONS = [
+    { value: "epay", label: "易支付 / Z-Pay" },
+    { value: "yqpay", label: "云启码支付（支付宝B）" },
+];
+const DRIVER_LABELS: Record<string, string> = { epay: "易支付", yqpay: "云启码支付" };
 const METHOD_OPTIONS = [
     { value: "alipay", labelKey: "admin.payments.alipay" },
     { value: "wxpay", labelKey: "admin.payments.wxpay" },
@@ -54,7 +58,7 @@ export default function AdminPaymentsPage() {
 
     const columns: ColumnsType<AdminPaymentChannel> = [
         { title: t("admin.payments.name"), dataIndex: "name", ellipsis: true },
-        { title: t("admin.payments.driver"), dataIndex: "driver", width: 110, render: (value: string) => (value === "epay" ? "易支付" : value) },
+        { title: t("admin.payments.driver"), dataIndex: "driver", width: 130, render: (value: string) => DRIVER_LABELS[value] ?? value },
         { title: t("admin.payments.merchantId"), dataIndex: "merchantId", width: 180, ellipsis: true },
         {
             title: t("admin.payments.methods"),

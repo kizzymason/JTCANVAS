@@ -153,6 +153,27 @@ export class WalletService {
         return order;
     }
 
+    /**
+     * 码支付类网关会给金额加小数位以保证并发到账可区分，下单后必须把订单金额对齐到网关实际收款额，
+     * 否则回调/查单的金额校验（`fulfillPendingOrder` 按 2 位小数精确比对）会对不上。只允许改未支付订单。
+     */
+    async alignPendingOrderAmount(orderNo: string, amount: MoneyInput) {
+        const value = toMoneyString(amount);
+        const [order] = await this.db
+            .select()
+            .from(orders)
+            .where(and(eq(orders.orderNo, orderNo), eq(orders.status, "pending")))
+            .limit(1);
+        if (!order) return null;
+        if (formatMoney(order.amount) === formatMoney(value)) return order;
+        const [updated] = await this.db
+            .update(orders)
+            .set({ amount: value, metadata: { ...(order.metadata ?? {}), payableAmount: value }, updatedAt: new Date() })
+            .where(and(eq(orders.id, order.id), eq(orders.status, "pending")))
+            .returning();
+        return updated ?? null;
+    }
+
     async getOwnedOrder(userId: string, orderNo: string) {
         const [order] = await this.db
             .select()

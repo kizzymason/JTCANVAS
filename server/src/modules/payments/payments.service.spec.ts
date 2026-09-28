@@ -11,6 +11,7 @@ import { toMoneyString } from "../../common/money";
 import { CryptoService } from "../crypto/crypto.service";
 import { WalletService } from "../wallet/wallet.service";
 import { EpayAdapter } from "./epay.adapter";
+import { YqpayAdapter } from "./yqpay.adapter";
 import { epaySign } from "./epay.sign";
 import { PaymentGatewayRegistry } from "./payment-gateway.registry";
 import { PaymentsService } from "./payments.service";
@@ -44,7 +45,7 @@ beforeAll(async () => {
         getSite: async () => ({ rechargeNotice: "" }),
     };
     const config = { get: (name: string) => (name === "publicUrl" ? "https://example.com" : name === "apiPrefix" ? "api" : name === "port" ? 4000 : undefined) } as ConfigService;
-    payments = new PaymentsService(db, wallet, crypto, settings as never, new PaymentGatewayRegistry(new EpayAdapter()), config);
+    payments = new PaymentsService(db, wallet, crypto, settings as never, new PaymentGatewayRegistry(new EpayAdapter(), new YqpayAdapter()), config);
 });
 
 afterAll(async () => {

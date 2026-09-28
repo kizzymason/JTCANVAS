@@ -9,7 +9,7 @@ import { CryptoService } from "../crypto/crypto.service";
 import { SettingsService } from "../settings/settings.service";
 import { WalletService } from "../wallet/wallet.service";
 import type { CreatePaymentChannelDto, CreateRechargeDto, RechargeSettingsDto, UpdatePaymentChannelDto, UpsertRechargePackageDto } from "./dto/payments.dto";
-import { isPaymentDriver, isPaymentMethod, type PaymentMethod } from "./payment-gateway";
+import { isPaymentDriver, isPaymentMethod, resolvePayableAmount, type PaymentMethod } from "./payment-gateway";
 import { PaymentGatewayRegistry } from "./payment-gateway.registry";
 import { seedPaymentCatalog } from "./payments.seed";
 
@@ -104,9 +104,17 @@ export class PaymentsService implements OnModuleInit {
             device: /mobile|android|iphone|ipad/i.test(params.userAgent) ? "mobile" : "pc",
         });
 
+        // 码支付类渠道（支付宝B）会给金额加小数位以区分并发到账，网关返回的 money 才是用户实际付的钱。
+        // 订单金额必须对齐它，否则回调/查单时 fulfillPendingOrder 的精确金额比对会失败、订单永远不到账。
+        const payable = resolvePayableAmount(checkout.money, order.amount);
+        if (formatMoney(payable) !== formatMoney(order.amount)) {
+            await this.wallet.alignPendingOrderAmount(order.orderNo, payable);
+            this.logger.log(`订单 ${order.orderNo} 金额对齐为网关实际收款额 ${formatMoney(payable)}（原 ${formatMoney(order.amount)}）`);
+        }
+
         return {
             orderNo: order.orderNo,
-            amount: order.amount,
+            amount: formatMoney(payable),
             creditAmount: pricing.creditAmount,
             method,
             payUrl: checkout.payUrl,
