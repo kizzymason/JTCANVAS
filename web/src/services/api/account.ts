@@ -56,10 +56,12 @@ export type RechargePackageOption = {
     salePrice: string;
 };
 
-export type RechargePayMethod = {
+/** 充值弹窗的支付选项：按渠道给出（同一支付方式的多个渠道分别列出）。 */
+export type RechargeChannelOption = {
+    channelId: string;
+    name: string;
     method: "alipay" | "wxpay";
     label: string;
-    channelId: string;
 };
 
 export type RechargeCatalog = {
@@ -67,7 +69,7 @@ export type RechargeCatalog = {
     allowCustomAmount: boolean;
     minAmount: string;
     maxAmount: string;
-    methods: RechargePayMethod[];
+    channels: RechargeChannelOption[];
     notice: string;
     available: boolean;
 };
