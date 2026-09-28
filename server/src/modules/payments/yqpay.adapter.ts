@@ -32,10 +32,12 @@ export type CheckoutLinks = {
 /**
  * 云启码支付（支付宝B 这类「码支付」渠道）。
  *
- * 协议字段与彩虹易支付一致（pid/type/out_trade_no/money/sign MD5），但收款方式是码支付：
- * 上游用支付宝开放平台的账单回调监听到账、并给金额加小数位来区分并发订单，所以
- *  1) 下单返回的 `money` 才是用户实际要付的金额，订单金额必须对齐它，否则回调金额校验不过；
- *  2) 通常拿不到二维码，只能引导用户点开收银台支付（`/Pay/console?trade_no=...`）。
+ * 协议字段与彩虹易支付一致（pid/type/out_trade_no/money/sign MD5），但收款方式不同：
+ *  1) `mapi.php` 必须同时带 `notify_url` 与 `return_url`，少一个就回「同步通知不可为空」并拒绝出码；
+ *  2) 出码时 `qrcode` 给的是**收款码链接本身**（不是图片地址），要在前端自己画成二维码；
+ *  3) 收款码是静态的（每单同一个），用户必须在支付宝里**手动输入金额**，所以金额必须显示清楚、可复制；
+ *  4) 应付金额由上游按小数位决定（实测下单 0.02 收银台显示 0.03），`mapi.php` 不返回它，只能从收银台页面取回；
+ *     订单金额必须对齐这个数，否则回调金额与订单不符、钱到了也不会入账。
  * 单独一个 driver，与 Z-Pay（易支付）互不影响。
  */
 @Injectable()
@@ -51,16 +53,38 @@ export class YqpayAdapter extends PaymentGateway {
             if (links.viaCashier) {
                 this.logger.log(`渠道未返回二维码，改用收银台支付：${links.payUrl}`);
             }
+            const tradeNo = firstNonEmpty(body.trade_no) || undefined;
+            const payable = normalizeGatewayMoney(body.money) || (tradeNo ? await this.consoleAmount(input.gatewayUrl, tradeNo) : "");
             return {
                 payUrl: links.payUrl,
                 qrcode: links.qrcode,
                 img: links.img,
-                tradeNo: firstNonEmpty(body.trade_no) || undefined,
-                money: normalizeGatewayMoney(body.money),
+                tradeNo,
+                money: payable || undefined,
             };
         } catch (error) {
             this.logger.warn(`mapi.php 不可用，退回页面跳转支付：${errorMessage(error)}`);
             return { payUrl: pageUrl };
+        }
+    }
+
+    /**
+     * 收银台页面上显示的应付金额才是用户真正要付、回调也只认的数，而 `mapi.php` 不返回它
+     * （上游按小数位区分并发订单，例如下单 0.02 会显示 0.03）。取不到就返回空串，绝不影响下单。
+     */
+    private async consoleAmount(gatewayUrl: string, tradeNo: string): Promise<string> {
+        try {
+            const response = await axios.get(buildConsoleUrl(gatewayUrl, tradeNo), {
+                timeout: REQUEST_TIMEOUT_MS,
+                validateStatus: () => true,
+            });
+            if (response.status !== 200 || typeof response.data !== "string") return "";
+            const amount = parseConsoleAmount(response.data);
+            if (amount) this.logger.log(`收银台应付金额 ${amount}（${tradeNo}）`);
+            return amount;
+        } catch (error) {
+            this.logger.warn(`读取收银台金额失败（不影响下单）：${errorMessage(error)}`);
+            return "";
         }
     }
 
@@ -163,6 +187,17 @@ export function yqpayMapiParams(input: GatewayCheckoutInput): Record<string, str
         if (value !== "") out[name] = value;
     }
     return out;
+}
+
+/**
+ * 从收银台页面抓这一单的应付金额。上游页面里是这样两处（实测）：
+ *   `<p class="money" id="price" …> 0.03 <button data-clipboard-text="0.03">复制金额</button>`
+ * 优先用复制按钮上的值（最干净），退而求其次用 `#price` 的文本；都抓不到返回空串。
+ */
+export function parseConsoleAmount(html: string): string {
+    const byClipboard = /data-clipboard-text\s*=\s*["']([0-9]+(?:\.[0-9]+)?)["']/i.exec(html);
+    const byPrice = /id\s*=\s*["']price["'][^>]*>\s*([0-9]+(?:\.[0-9]+)?)/i.exec(html);
+    return normalizeGatewayMoney(byClipboard?.[1] ?? byPrice?.[1] ?? "") || "";
 }
 
 /** 收银台地址：码支付拿不到二维码时，用户点开这个页面完成支付。 */
