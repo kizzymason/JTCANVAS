@@ -99,7 +99,7 @@ export type AdminCard = { id: string; code: string; faceValue: string; status: "
 export type AdminPaymentChannel = {
     id: string;
     name: string;
-    driver: "epay";
+    driver: "epay" | "yqpay";
     gatewayUrl: string;
     merchantId: string;
     methods: Array<"alipay" | "wxpay">;
