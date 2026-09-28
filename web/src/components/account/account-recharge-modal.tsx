@@ -58,7 +58,7 @@ function OnlineRechargeForm({ active, onSuccess }: { active: boolean; onSuccess:
     const [loading, setLoading] = useState(true);
     const [packageId, setPackageId] = useState<string>();
     const [customAmount, setCustomAmount] = useState("");
-    const [method, setMethod] = useState<"alipay" | "wxpay">("alipay");
+    const [channelId, setChannelId] = useState<string>();
     const [submitting, setSubmitting] = useState(false);
     const [checkout, setCheckout] = useState<RechargeCheckout | null>(null);
     const pollRef = useRef<number | null>(null);
@@ -72,8 +72,8 @@ function OnlineRechargeForm({ active, onSuccess }: { active: boolean; onSuccess:
             .then((result) => {
                 if (cancelled) return;
                 setCatalog(result);
-                const firstMethod = result.methods[0]?.method;
-                if (firstMethod) setMethod(firstMethod);
+                const firstChannel = result.channels[0]?.channelId;
+                if (firstChannel) setChannelId(firstChannel);
                 const firstPackage = result.packages[0]?.id;
                 if (firstPackage) setPackageId(firstPackage);
             })
@@ -160,14 +160,16 @@ function OnlineRechargeForm({ active, onSuccess }: { active: boolean; onSuccess:
     const usingCustom = catalog.allowCustomAmount && !packageId;
 
     const pay = async () => {
-        if (!method) {
+        const picked = catalog.channels.find((item) => item.channelId === channelId);
+        if (!picked) {
             message.error(t("account.selectMethod"));
             return;
         }
         setSubmitting(true);
         try {
-            const channelId = catalog.methods.find((item) => item.method === method)?.channelId;
-            const body = usingCustom ? { amount: customAmount.trim(), method, channelId } : { packageId, method, channelId };
+            const body = usingCustom
+                ? { amount: customAmount.trim(), method: picked.method, channelId: picked.channelId }
+                : { packageId, method: picked.method, channelId: picked.channelId };
             setCheckout(await createRecharge(body, newIdempotencyKey()));
         } catch (error) {
             message.error(error instanceof ApiError ? error.message : t("account.payFailed"));
@@ -182,34 +184,38 @@ function OnlineRechargeForm({ active, onSuccess }: { active: boolean; onSuccess:
             {catalog.packages.length ? (
                 <div className="mb-4 grid grid-cols-2 gap-2">
                     {catalog.packages.map((item) => (
-                        <PackageButton key={item.id} item={item} active={packageId === item.id} onClick={() => setPackageId(item.id)} />
+                        <PackageButton
+                            key={item.id}
+                            item={item}
+                            active={packageId === item.id}
+                            onClick={() => {
+                                setPackageId(item.id);
+                                setCustomAmount("");
+                            }}
+                        />
                     ))}
                 </div>
             ) : null}
 
             {catalog.allowCustomAmount ? (
                 <div className="mb-4">
-                    <button
-                        type="button"
-                        className={`mb-2 text-xs ${usingCustom ? "font-medium text-stone-900 dark:text-stone-100" : "text-stone-500"}`}
-                        onClick={() => setPackageId(undefined)}
-                    >
-                        {t("account.customAmount")}
-                    </button>
-                    {usingCustom ? (
-                        <Input
-                            value={customAmount}
-                            onChange={(event) => setCustomAmount(event.target.value)}
-                            placeholder={t("account.minAmountHint", { amount: formatMoney(catalog.minAmount) })}
-                            prefix="¥"
-                        />
-                    ) : null}
+                    <div className={`mb-2 text-xs ${usingCustom ? "font-medium text-stone-900 dark:text-stone-100" : "text-stone-500"}`}>{t("account.customAmount")}</div>
+                    <Input
+                        value={customAmount}
+                        onChange={(event) => {
+                            setCustomAmount(event.target.value);
+                            if (event.target.value.trim()) setPackageId(undefined);
+                        }}
+                        placeholder={t("account.minAmountHint", { amount: formatMoney(catalog.minAmount) })}
+                        prefix="¥"
+                        allowClear
+                    />
                 </div>
             ) : null}
 
             <div className="mb-4 flex gap-2">
-                {catalog.methods.map((item) => (
-                    <Button key={item.method} type={method === item.method ? "primary" : "default"} onClick={() => setMethod(item.method)}>
+                {catalog.channels.map((item) => (
+                    <Button key={item.channelId} type={channelId === item.channelId ? "primary" : "default"} onClick={() => setChannelId(item.channelId)}>
                         {item.label}
                     </Button>
                 ))}

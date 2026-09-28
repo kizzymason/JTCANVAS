@@ -45,13 +45,13 @@ export class PaymentsService implements OnModuleInit {
     }
 
     async catalog() {
-        const [packages, channels, recharge, site] = await Promise.all([
+        const [packages, usableChannels, recharge, site] = await Promise.all([
             this.db.select().from(rechargePackages).where(eq(rechargePackages.enabled, true)).orderBy(asc(rechargePackages.sortOrder), asc(rechargePackages.createdAt)),
             this.listUsableChannels(),
             this.settings.getRecharge(),
             this.settings.getSite(),
         ]);
-        const methods = this.collectMethods(channels);
+        const channels = this.collectChannelOptions(usableChannels);
         return {
             packages: packages.map((item) => ({
                 id: item.id,
@@ -62,9 +62,9 @@ export class PaymentsService implements OnModuleInit {
             allowCustomAmount: recharge.allowCustomAmount,
             minAmount: recharge.minAmount,
             maxAmount: recharge.maxAmount,
-            methods,
+            channels,
             notice: site.rechargeNotice,
-            available: methods.length > 0 && (packages.length > 0 || recharge.allowCustomAmount),
+            available: channels.length > 0 && (packages.length > 0 || recharge.allowCustomAmount),
         };
     }
 
@@ -429,6 +429,27 @@ export class PaymentsService implements OnModuleInit {
             .where(eq(paymentChannels.enabled, true))
             .orderBy(asc(paymentChannels.sortOrder), asc(paymentChannels.createdAt));
         return rows.filter((row) => row.secretCipher && row.merchantId && isPaymentDriver(row.driver));
+    }
+
+    /**
+     * 充值弹窗的支付选项按「渠道」给出，不按支付方式去重：
+     * 两个渠道都能收支付宝时必须分别出现，前台用渠道名称让用户选，避免只剩一个。
+     * 单个渠道支持多种方式时标签补上方式名，避免同一渠道出现两个同名选项。
+     */
+    private collectChannelOptions(channels: ChannelRow[]) {
+        const options: Array<{ channelId: string; name: string; method: PaymentMethod; label: string }> = [];
+        for (const channel of channels) {
+            const supported = [...new Set((channel.methods ?? []).filter(isPaymentMethod))];
+            for (const method of supported) {
+                options.push({
+                    channelId: channel.id,
+                    name: channel.name,
+                    method,
+                    label: supported.length > 1 ? `${channel.name} · ${METHOD_LABELS[method]}` : channel.name,
+                });
+            }
+        }
+        return options;
     }
 
     private collectMethods(channels: ChannelRow[]) {
