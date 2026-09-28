@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { SegmentedSwitch } from "@/components/ui/segmented-switch";
 import { createRecharge, fetchRechargeCatalog, fetchRechargeOrder, redeemCard, type RechargeCatalog, type RechargeCheckout, type RechargePackageOption } from "@/services/api/account";
 import { ApiError, newIdempotencyKey } from "@/services/api/client";
+import { QRCodeSVG } from "qrcode.react";
 import { formatMoney } from "@/services/api/models";
 import { useAuthStore } from "@/stores/use-auth-store";
 
@@ -140,12 +141,22 @@ function OnlineRechargeForm({ active, onSuccess }: { active: boolean; onSuccess:
     }
 
     if (checkout) {
-        const qrSrc = checkout.img || (checkout.qrcode.startsWith("http") && /\.(png|jpg|jpeg|gif|webp)(\?|$)/i.test(checkout.qrcode) ? checkout.qrcode : "");
+        // 网关给的 qrcode 有两种形态：图片地址（易支付常见），以及「二维码内容」本身——
+        // 码支付类渠道（云启）返回的就是支付宝二维码链接（如 https://qr.alipay.com/xxx），
+        // 这种必须由前端自己画成二维码才能扫，直接塞进 img src 会是一张破图。
+        const qrImage = checkout.img || (checkout.qrcode.startsWith("http") && /\.(png|jpg|jpeg|gif|webp)(\?|$)/i.test(checkout.qrcode) ? checkout.qrcode : "");
+        const qrValue = qrImage ? "" : checkout.qrcode.trim();
         return (
             <div className="flex flex-col items-center gap-3 py-2 text-center">
                 <p className="text-sm font-medium">{t("account.waitingPayment")}</p>
                 <p className="text-xs text-stone-500">{t("account.payAmountHint", { paid: formatMoney(checkout.amount), credit: formatMoney(checkout.creditAmount) })}</p>
-                {qrSrc ? <img src={qrSrc} alt={t("account.scanQr")} className="size-48 rounded-md bg-white p-2" /> : null}
+                {qrImage ? <img src={qrImage} alt={t("account.scanQr")} className="size-48 rounded-md bg-white p-2" /> : null}
+                {qrValue ? (
+                    <div className="rounded-md bg-white p-2" role="img" aria-label={t("account.scanQr")}>
+                        <QRCodeSVG value={qrValue} size={176} level="M" />
+                    </div>
+                ) : null}
+                {qrImage || qrValue ? <p className="text-xs text-stone-500">{t("account.scanQr")}</p> : null}
                 <Button type="primary" href={checkout.payUrl} target="_blank" rel="noreferrer">
                     {t("account.openCashier")}
                 </Button>

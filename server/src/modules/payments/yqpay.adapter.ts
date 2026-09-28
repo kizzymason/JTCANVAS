@@ -124,22 +124,7 @@ export class YqpayAdapter extends PaymentGateway {
     }
 
     private async mapi(input: GatewayCheckoutInput): Promise<YqpayCheckoutBody> {
-        const raw: Record<string, string> = {
-            pid: input.merchantId,
-            type: input.method,
-            out_trade_no: input.orderNo,
-            notify_url: input.notifyUrl,
-            name: input.name,
-            money: input.money,
-            clientip: input.clientIp,
-            device: input.device ?? "pc",
-            cid: input.cid ?? "",
-            param: input.param ?? "",
-        };
-        const params: Record<string, string> = {};
-        for (const [name, value] of Object.entries(raw)) {
-            if (value !== "") params[name] = value;
-        }
+        const params = yqpayMapiParams(input);
         params.sign = epaySign(params, input.secret);
         params.sign_type = "MD5";
         const response = await axios.post(`${trimSlash(input.gatewayUrl)}/mapi.php`, new URLSearchParams(params).toString(), {
@@ -153,6 +138,31 @@ export class YqpayAdapter extends PaymentGateway {
         }
         return body;
     }
+}
+
+/**
+ * mapi.php 的下单参数（未签名）。云启码支付要求 `notify_url`（异步通知）与 `return_url`（同步通知）**都**必须存在：
+ * 少了 return_url，上游直接回 `{"code":201,"msg":"同步通知不可为空!"}`，既拿不到 trade_no 也拿不到二维码，
+ * 只能退回页面跳转（2026-09-28 在生产上实测踩到：照搬彩虹易支付的 mapi 参数就会中招）。
+ */
+export function yqpayMapiParams(input: GatewayCheckoutInput): Record<string, string> {
+    const out: Record<string, string> = {};
+    for (const [name, value] of Object.entries({
+        pid: input.merchantId,
+        type: input.method,
+        out_trade_no: input.orderNo,
+        notify_url: input.notifyUrl,
+        return_url: input.returnUrl,
+        name: input.name,
+        money: input.money,
+        clientip: input.clientIp,
+        device: input.device ?? "pc",
+        cid: input.cid ?? "",
+        param: input.param ?? "",
+    })) {
+        if (value !== "") out[name] = value;
+    }
+    return out;
 }
 
 /** 收银台地址：码支付拿不到二维码时，用户点开这个页面完成支付。 */

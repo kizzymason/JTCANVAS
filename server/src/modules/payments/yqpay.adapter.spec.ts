@@ -1,9 +1,39 @@
 import { describe, expect, it } from "vitest";
 import { resolvePayableAmount } from "./payment-gateway";
-import { buildConsoleUrl, normalizeGatewayMoney, resolveCheckoutLinks } from "./yqpay.adapter";
+import { buildConsoleUrl, normalizeGatewayMoney, resolveCheckoutLinks, yqpayMapiParams } from "./yqpay.adapter";
 
 const GATEWAY = "https://ypay.yunqi.ink";
 const PAGE = `${GATEWAY}/submit.php?pid=1000&sign=abc`;
+const MAPI_INPUT = {
+    gatewayUrl: GATEWAY,
+    merchantId: "1000",
+    secret: "secret",
+    method: "alipay" as const,
+    orderNo: "IC2026092801",
+    money: "20.15",
+    name: "余额充值",
+    notifyUrl: "https://jingtiang.com/api/payments/epay/notify",
+    returnUrl: "https://jingtiang.com/",
+    clientIp: "1.2.3.4",
+    cid: "448",
+};
+
+describe("mapi.php 下单参数", () => {
+    it("必须同时带 notify_url 与 return_url：少 return_url 上游会回「同步通知不可为空」并拒绝出码", () => {
+        const params = yqpayMapiParams(MAPI_INPUT);
+        expect(params.notify_url).toBe(MAPI_INPUT.notifyUrl);
+        expect(params.return_url).toBe(MAPI_INPUT.returnUrl);
+        expect(params.out_trade_no).toBe(MAPI_INPUT.orderNo);
+        expect(params.cid).toBe("448");
+        expect(params.pid).toBe("1000");
+    });
+
+    it("空值不下发（cid/param 为空时该字段不出现）", () => {
+        const params = yqpayMapiParams({ ...MAPI_INPUT, cid: "", param: "" });
+        expect("cid" in params).toBe(false);
+        expect("param" in params).toBe(false);
+    });
+});
 
 describe("码支付（支付宝B）收银台路由", () => {
     it("拿不到二维码时必须给出收银台地址，让用户点开支付", () => {
