@@ -2741,7 +2741,7 @@ export default {
             loadFailed: "加载模型列表失败",
             viewDocs: "查看 API 文档",
             multiplierNotice: "当前加价幅度：{{surcharge}}",
-            multiplierHint: "下表价格已包含你的加价幅度，可直接作为对下游报价的成本基准。",
+            multiplierHint: "卡片上的价格已包含你的加价幅度，可直接作为对下游报价的成本基准。",
             searchPlaceholder: "搜索模型标识或名称",
             modelId: "模型标识",
             capability: "能力",

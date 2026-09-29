@@ -2786,7 +2786,7 @@ export default {
             loadFailed: "Could not load the model list",
             viewDocs: "API docs",
             multiplierNotice: "Your markup: {{surcharge}}",
-            multiplierHint: "The prices below already include your markup, so they are your cost basis when quoting downstream.",
+            multiplierHint: "The prices on each card already include your markup, so they are your cost basis when quoting downstream.",
             searchPlaceholder: "Search model id or name",
             modelId: "Model id",
             capability: "Capability",
