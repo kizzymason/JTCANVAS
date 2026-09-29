@@ -187,6 +187,16 @@ function LedgerPanel() {
     return <Table rowKey="id" size="small" loading={loading} dataSource={data.items} columns={columns} scroll={TABLE_SCROLL} pagination={{ current: page, pageSize: PAGE_SIZE, total: data.total, onChange: setPage, showSizeChanger: false }} />;
 }
 
+/**
+ * 原价 for one usage record: the list price of what was actually delivered once the task settled, and
+ * the list-price freeze while it is still running. Failed tasks settle at zero, so they keep showing
+ * the freeze — "what this would have cost" — beside a ¥0.00 charge instead of a meaningless ¥0.00/¥0.00.
+ */
+function usageListCost(task: GenerationTask) {
+    const settled = task.status === "succeeded" || task.status === "partial";
+    return settled ? task.publicActualCost : task.publicEstimatedCost;
+}
+
 function UsagePanel() {
     const { t } = useTranslation();
     const [page, setPage] = useState(1);
@@ -213,7 +223,23 @@ function UsagePanel() {
         { title: t("account.usage.model"), dataIndex: "modelName", ellipsis: true },
         { title: t("account.usage.quantity"), width: 110, align: "right", render: (_value, task) => taskProgressLabel(task) },
         { title: t("account.usage.status"), dataIndex: "status", width: 100, render: (value: string) => <Tag color={statusColor(value)}>{t(`account.taskStatus.${value}`)}</Tag> },
-        { title: t("account.usage.cost"), width: 110, align: "right", render: (_value, task) => `¥${formatMoney(task.status === "pending" || task.status === "running" ? task.estimatedCost : task.actualCost)}` },
+        {
+            title: t("account.usage.listCost"),
+            width: 110,
+            align: "right",
+            render: (_value, task) => <span className="tabular-nums text-stone-500">{`¥${formatMoney(usageListCost(task))}`}</span>,
+        },
+        {
+            title: t("account.usage.actualCost"),
+            width: 110,
+            align: "right",
+            render: (_value, task) =>
+                task.status === "pending" || task.status === "running" ? (
+                    <span className="text-stone-400">-</span>
+                ) : (
+                    <span className="tabular-nums font-medium">{`¥${formatMoney(task.actualCost)}`}</span>
+                ),
+        },
         { title: t("account.usage.error"), dataIndex: "error", ellipsis: true, render: (value: string) => (value ? <span className="text-xs text-red-500">{value}</span> : "-") },
     ];
 

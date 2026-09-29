@@ -7,7 +7,7 @@ import { badRequest, forbidden } from "../../common/errors";
 import { toMoneyString } from "../../common/money";
 import type { Paginated } from "../../common/types";
 import { PricingService } from "../pricing/pricing.service";
-import { applyMultiplier, effectiveMultiplier, NEUTRAL_MULTIPLIER } from "../pricing/reseller-multiplier";
+import { applyMultiplier, effectiveMultiplier, NEUTRAL_MULTIPLIER, publicAmount } from "../pricing/reseller-multiplier";
 import { ResellerPricingService } from "../pricing/reseller-pricing.service";
 import { WalletService } from "../wallet/wallet.service";
 import { utcDateString } from "../visitors/visitors-classify";
@@ -185,7 +185,14 @@ export class ResellerService {
                 .offset((query.page - 1) * query.pageSize),
             this.db.select({ total: sql<number>`count(*)::int` }).from(apiRequestLogs).where(where),
         ]);
-        return { items, total: counted?.total ?? 0, page: query.page, pageSize: query.pageSize };
+        return {
+            // List price beside the charged amount: the coefficient was snapshotted with the request,
+            // so a later tier change cannot rewrite what an old row shows.
+            items: items.map((item) => ({ ...item, publicBilledAmount: publicAmount(item.billedAmount, item.multiplier) })),
+            total: counted?.total ?? 0,
+            page: query.page,
+            pageSize: query.pageSize,
+        };
     }
 
     /**

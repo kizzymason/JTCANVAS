@@ -25,6 +25,9 @@ export type GenerationTask = {
     succeededCount: number;
     estimatedCost: string;
     actualCost: string;
+    /** The same two amounts at list price; identical unless a reseller coefficient was applied. */
+    publicEstimatedCost: string;
+    publicActualCost: string;
     outputFileIds: string[];
     /** Resolved output files, already ordered. */
     outputs: TaskOutput[];

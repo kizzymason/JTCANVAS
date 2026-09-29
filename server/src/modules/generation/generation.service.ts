@@ -10,6 +10,7 @@ import type { Paginated } from "../../common/types";
 import { assertImageGenerationFeatures, assertVideoGenerationFeatures } from "../pricing/model-features";
 import { PricingService } from "../pricing/pricing.service";
 import { decodeModelValue } from "../pricing/pricing.types";
+import { publicAmount } from "../pricing/reseller-multiplier";
 import { billableInputTokens } from "../pricing/token-counter";
 import { SettingsService } from "../settings/settings.service";
 import { assertGenerationEnabled } from "../settings/site-services";
@@ -363,6 +364,8 @@ export class GenerationService {
     }
 
     toResponse(task: GenerationTask) {
+        // Snapshotted at submit time, so a later tier change cannot rewrite an old record's list price.
+        const multiplier = typeof task.params.billingMultiplier === "string" ? task.params.billingMultiplier : undefined;
         return {
             id: task.id,
             capability: task.capability,
@@ -374,6 +377,12 @@ export class GenerationService {
             succeededCount: task.succeededCount,
             estimatedCost: task.estimatedCost,
             actualCost: task.actualCost,
+            /**
+             * The same two amounts at list price, so the customer can see their own rate: they are
+             * identical to `estimatedCost`/`actualCost` unless a reseller coefficient was applied.
+             */
+            publicEstimatedCost: publicAmount(task.estimatedCost, multiplier),
+            publicActualCost: publicAmount(task.actualCost, multiplier),
             outputFileIds: task.outputFileIds,
             outputText: task.outputText,
             error: task.error,
