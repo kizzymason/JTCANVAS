@@ -74,6 +74,8 @@ export type ApiLogEntry = {
     inputTokens: number;
     outputTokens: number;
     billedAmount: string;
+    /** List price of the same request; differs only when a reseller coefficient applied. */
+    publicBilledAmount: string;
     multiplier: string;
     latencyMs: number;
     clientIp: string;

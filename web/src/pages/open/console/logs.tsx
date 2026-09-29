@@ -80,11 +80,12 @@ export default function OpenConsoleLogsPage() {
                     t("openPlatform.logs.status"),
                     t("openPlatform.logs.inputTokens"),
                     t("openPlatform.logs.outputTokens"),
-                    t("openPlatform.logs.amount"),
+                    t("openPlatform.logs.listAmount"),
+                    t("openPlatform.logs.actualAmount"),
                     t("openPlatform.logs.latency"),
                     t("openPlatform.logs.errorCode"),
                 ],
-                rows.map((row) => [new Date(row.createdAt).toISOString(), row.endpoint, row.model, row.apiKeyName ?? "", row.status, row.inputTokens, row.outputTokens, formatMoney(row.billedAmount), row.latencyMs, row.errorCode]),
+                rows.map((row) => [new Date(row.createdAt).toISOString(), row.endpoint, row.model, row.apiKeyName ?? "", row.status, row.inputTokens, row.outputTokens, formatMoney(row.publicBilledAmount), formatMoney(row.billedAmount), row.latencyMs, row.errorCode]),
             );
         } catch (error) {
             message.error(error instanceof ApiError ? error.message : t("openPlatform.logs.exportFailed"));
@@ -114,11 +115,18 @@ export default function OpenConsoleLogsPage() {
         { title: t("openPlatform.logs.inputTokens"), dataIndex: "inputTokens", width: 100, align: "right" },
         { title: t("openPlatform.logs.outputTokens"), dataIndex: "outputTokens", width: 100, align: "right" },
         {
-            title: t("openPlatform.logs.amount"),
+            title: t("openPlatform.logs.listAmount"),
+            dataIndex: "publicBilledAmount",
+            width: 110,
+            align: "right",
+            render: (value: string) => <span className="tabular-nums text-stone-500">{`¥${formatMoney(value)}`}</span>,
+        },
+        {
+            title: t("openPlatform.logs.actualAmount"),
             dataIndex: "billedAmount",
             width: 110,
             align: "right",
-            render: (value: string) => <span className="tabular-nums">{`¥${formatMoney(value)}`}</span>,
+            render: (value: string) => <span className="tabular-nums font-medium">{`¥${formatMoney(value)}`}</span>,
         },
         { title: t("openPlatform.logs.latency"), dataIndex: "latencyMs", width: 100, align: "right", render: (value: number) => `${value} ms` },
         { title: t("openPlatform.logs.clientIp"), dataIndex: "clientIp", width: 130, ellipsis: true, render: (value: string) => value || "-" },

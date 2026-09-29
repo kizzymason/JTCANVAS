@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { applyMultiplier, coefficientFromSurcharge, effectiveMultiplier, isNeutralMultiplier, NEUTRAL_MULTIPLIER } from "./reseller-multiplier";
+import { ceilMoney, mulMoney, toMoneyString } from "../../common/money";
+import { applyMultiplier, coefficientFromSurcharge, effectiveMultiplier, isNeutralMultiplier, NEUTRAL_MULTIPLIER, publicAmount } from "./reseller-multiplier";
 
 describe("reseller multiplier", () => {
     it("turns a signed surcharge into a coefficient", () => {
@@ -57,5 +58,31 @@ describe("reseller multiplier", () => {
         expect(isNeutralMultiplier("1.000000")).toBe(true);
         expect(isNeutralMultiplier("1.200000")).toBe(false);
         expect(applyMultiplier("0.3", undefined).toFixed(6)).toBe("0.300000");
+    });
+
+    it("recovers the list price from an amount charged at a reseller rate", () => {
+        // The same worked example, read backwards: a discount of -0.2 on ¥0.3 bills ¥0.24.
+        expect(publicAmount("0.360000", "1.200000")).toBe("0.300000");
+        expect(publicAmount("0.240000", "0.800000")).toBe("0.300000");
+    });
+
+    it("leaves list-priced amounts untouched", () => {
+        for (const multiplier of [undefined, "1", NEUTRAL_MULTIPLIER]) {
+            expect(publicAmount("0.300000", multiplier)).toBe("0.300000");
+        }
+    });
+
+    it("never divides by a coefficient that is zero or negative", () => {
+        expect(publicAmount("0.360000", "0.000000")).toBe("0.360000");
+        expect(publicAmount("0.360000", "-0.200000")).toBe("0.360000");
+    });
+
+    it("stays within one storage unit of the truth after a rounded-up freeze", () => {
+        // Freezes round *up* to the storage scale, so the recovered figure can sit one unit of the
+        // 6th decimal above the exact list price. It must never drift further, or the 原价 shown to a
+        // customer would overstate the rate they are on.
+        const charged = toMoneyString(ceilMoney(mulMoney("0.123456", "1.200000")));
+        expect(charged).toBe("0.148148");
+        expect(publicAmount(charged, "1.200000")).toBe("0.123457");
     });
 });

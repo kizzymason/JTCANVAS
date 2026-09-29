@@ -42,3 +42,20 @@ export function applyMultiplier(amount: MoneyInput, multiplier: string | undefin
     if (isNeutralMultiplier(multiplier)) return money(amount);
     return money(amount).times(money(multiplier!));
 }
+
+/**
+ * Recovers the public (list) price from an already-charged amount by reversing the coefficient, so a
+ * reseller can be shown what the same usage costs without their own rate. Amounts that were charged
+ * at list price (neutral or absent coefficient) come back untouched, and a non-positive coefficient
+ * is treated the same way rather than dividing by zero.
+ *
+ * The freeze rounds up to the storage scale, so the recovered figure can sit up to one unit of the
+ * 6th decimal above the true list price. That is invisible at the two decimals the UI and the CSV
+ * export render, and it keeps the displayed 原价 honest without a second snapshot column.
+ */
+export function publicAmount(amount: MoneyInput, multiplier: string | undefined) {
+    if (isNeutralMultiplier(multiplier)) return toMoneyString(amount);
+    const coefficient = money(multiplier!);
+    if (coefficient.lte(0)) return toMoneyString(amount);
+    return toMoneyString(money(amount).div(coefficient));
+}
