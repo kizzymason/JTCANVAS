@@ -149,6 +149,8 @@ export class CardShopService {
         method: string;
         returnUrl: string;
         clientIp: string;
+        /** Buyer address the channel reported, already validated; empty means "use our own address". */
+        buyerIp?: string;
         userAgent: string;
     }) {
         const method = params.method;
@@ -184,11 +186,18 @@ export class CardShopService {
                 label: this.merchants.checkoutLabelFor(params.merchant, `${params.product.name} ×${params.quantity}`),
                 channelId: params.merchant.preferredChannelId ?? undefined,
                 userAgent: params.userAgent,
+                clientIp: params.buyerIp ?? "",
             });
             await this.db
                 .update(cardOrders)
                 .set({
-                    metadata: { channelId: checkout.channelId, driver: checkout.driver, method, returnUrl: params.returnUrl },
+                    metadata: {
+                        channelId: checkout.channelId,
+                        driver: checkout.driver,
+                        method,
+                        returnUrl: params.returnUrl,
+                        ...(params.buyerIp ? { buyerIp: params.buyerIp } : {}),
+                    },
                     updatedAt: new Date(),
                 })
                 .where(eq(cardOrders.id, order.id));
@@ -334,7 +343,10 @@ export class CardShopService {
      * someone else's domain is exactly the mismatch that gets an account reviewed. Sending the buyer
      * onward to the channel's page happens afterwards, in `handleReturn`.
      */
-    private async openGateway(order: typeof cardOrders.$inferSelect, options: { method: PaymentMethod; label: string; channelId?: string; userAgent: string }) {
+    private async openGateway(
+        order: typeof cardOrders.$inferSelect,
+        options: { method: PaymentMethod; label: string; channelId?: string; userAgent: string; clientIp?: string },
+    ) {
         return this.payments.createExternalCheckout({
             orderNo: order.orderNo,
             amount: order.amount,
@@ -342,7 +354,9 @@ export class CardShopService {
             method: options.method,
             notifyPath: CARD_NOTIFY_PATH,
             returnPath: CARD_RETURN_PATH,
-            clientIp: order.clientIp,
+            // A channel sale hands over the buyer's own address, or an empty string when the channel
+            // has none — the gateway then records our connection address, never the channel's server.
+            clientIp: options.clientIp ?? order.clientIp,
             userAgent: options.userAgent,
             channelId: options.channelId,
         });

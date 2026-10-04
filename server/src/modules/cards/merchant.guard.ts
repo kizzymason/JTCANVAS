@@ -53,6 +53,18 @@ export function clientIp(request: { headers: Record<string, string | string[] | 
     return request.ip ?? "";
 }
 
+/**
+ * Buyer IP a channel forwards in `x-buyer-ip`, for the gateway's own risk checks.
+ *
+ * Kept apart from `clientIp()`: that one feeds the merchant IP allowlist, so it has to keep coming
+ * from the connection. Only the address handed to the gateway may come from the channel.
+ */
+export function buyerIp(request: { headers: Record<string, string | string[] | undefined> }) {
+    const raw = request.headers["x-buyer-ip"];
+    const value = Array.isArray(raw) ? raw[0] : raw;
+    return value?.split(",")[0]!.trim() ?? "";
+}
+
 export function userAgentOf(request: { headers: Record<string, string | string[] | undefined> }) {
     const raw = request.headers["user-agent"];
     return (Array.isArray(raw) ? raw[0] : raw) ?? "";

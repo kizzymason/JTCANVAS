@@ -64,7 +64,7 @@ export class CardDistService {
      * unique index on `(merchant_id, merchant_reference)` means a retried request returns the
      * original checkout instead of opening a second one and charging the buyer twice.
      */
-    async createCheckout(merchant: ResolvedMerchant, input: CreateChannelCheckoutDto, context: { clientIp: string; userAgent: string }) {
+    async createCheckout(merchant: ResolvedMerchant, input: CreateChannelCheckoutDto, context: { clientIp: string; buyerIp?: string; userAgent: string }) {
         const existing = await this.findByReference(merchant.id, input.reference);
         if (existing) return existing;
 
@@ -91,6 +91,7 @@ export class CardDistService {
                 method: input.method,
                 returnUrl: this.merchants.resolveReturnUrl(merchant, input.returnUrl),
                 clientIp: context.clientIp,
+                buyerIp: publicIp(context.buyerIp),
                 userAgent: context.userAgent,
             });
             void this.merchants.touch(merchant.id).catch(() => undefined);
@@ -252,4 +253,30 @@ export class CardDistService {
         if (!product) throw notFound("商品不存在或已下架");
         return product;
     }
+}
+
+/**
+ * Buyer address a channel reported. Only a global unicast address is usable as the payer at the
+ * gateway; anything private, loopback or malformed is dropped so the gateway falls back to our own
+ * connection address rather than recording something meaningless.
+ */
+export function publicIp(value?: string) {
+    const ip = value?.trim() ?? "";
+    if (!ip || ip.length > 45) return "";
+    if (ip.includes(":")) {
+        const lowered = ip.toLowerCase();
+        const blocked = lowered.startsWith("::") || lowered.startsWith("fc") || lowered.startsWith("fd") || lowered.startsWith("fe80");
+        return blocked ? "" : ip;
+    }
+    const parts = ip.split(".");
+    if (parts.length !== 4) return "";
+    const octets = parts.map((part) => (/^\d{1,3}$/.test(part) ? Number(part) : -1));
+    if (octets.some((octet) => octet < 0 || octet > 255)) return "";
+    const first = octets[0]!;
+    const second = octets[1]!;
+    if (first === 0 || first === 10 || first === 127 || first >= 224) return "";
+    if (first === 172 && second >= 16 && second <= 31) return "";
+    if (first === 192 && second === 168) return "";
+    if (first === 169 && second === 254) return "";
+    return ip;
 }

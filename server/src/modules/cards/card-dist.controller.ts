@@ -4,7 +4,7 @@ import { ApiOperation, ApiSecurity, ApiTags } from "@nestjs/swagger";
 import { Public } from "../../common/decorators";
 import { CardDistService } from "./card-dist.service";
 import { CardChannelOrderQueryDto, CreateChannelCheckoutDto, PaginationQueryDto } from "./dto/card-dist.dto";
-import { MerchantGuard, clientIp, userAgentOf, type RequestWithMerchant } from "./merchant.guard";
+import { MerchantGuard, buyerIp, clientIp, userAgentOf, type RequestWithMerchant } from "./merchant.guard";
 
 /**
  * Sales-channel API, authenticated with a channel secret.
@@ -35,7 +35,11 @@ export class CardDistController {
     @Throttle({ default: { limit: 120, ttl: 60_000 } })
     @ApiOperation({ summary: "创建收银台：主站定价、主站收款，返回付款链接与二维码" })
     createCheckout(@Req() request: RequestWithMerchant, @Body() body: CreateChannelCheckoutDto) {
-        return this.dist.createCheckout(request.merchant!, body, { clientIp: clientIp(request), userAgent: userAgentOf(request) });
+        return this.dist.createCheckout(request.merchant!, body, {
+            clientIp: clientIp(request),
+            buyerIp: buyerIp(request),
+            userAgent: userAgentOf(request),
+        });
     }
 
     @Get("checkouts/:orderNo")

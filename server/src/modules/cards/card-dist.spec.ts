@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { hashToken } from "./card-shop.service";
-import { bearerSecret, clientIp, userAgentOf } from "./merchant.guard";
+import { publicIp } from "./card-dist.service";
+import { bearerSecret, buyerIp, clientIp, userAgentOf } from "./merchant.guard";
 import { MerchantWebhookService, WEBHOOK_REPLAY_WINDOW_SECONDS } from "./merchant-webhook.service";
 import { commissionFor, commissionPayableAt, fitsDailyLimit, resolveReturnUrl } from "./merchant.rules";
 
@@ -178,5 +179,36 @@ describe("webhook signing", () => {
         expect(MerchantWebhookService.verify(secret, body, "", 1_700_000_000)).toBe(false);
         expect(MerchantWebhookService.verify(secret, body, "garbage", 1_700_000_000)).toBe(false);
         expect(MerchantWebhookService.verify(secret, body, "t=abc,v1=def", 1_700_000_000)).toBe(false);
+    });
+});
+
+describe("buyerIp", () => {
+    it("reads the buyer address a channel forwarded, ignoring extra hops", () => {
+        expect(buyerIp({ headers: { "x-buyer-ip": "203.0.113.9" } })).toBe("203.0.113.9");
+        expect(buyerIp({ headers: { "x-buyer-ip": "203.0.113.9, 10.0.0.1" } })).toBe("203.0.113.9");
+    });
+
+    it("returns an empty string when the channel sent nothing", () => {
+        expect(buyerIp({ headers: {} })).toBe("");
+    });
+});
+
+describe("publicIp", () => {
+    it("keeps global unicast addresses", () => {
+        expect(publicIp("203.0.113.9")).toBe("203.0.113.9");
+        expect(publicIp(" 8.8.8.8 ")).toBe("8.8.8.8");
+        expect(publicIp("2400:3200::1")).toBe("2400:3200::1");
+    });
+
+    it("drops private, loopback and link-local addresses so the gateway falls back to us", () => {
+        for (const value of ["10.0.0.7", "172.16.0.1", "172.31.255.254", "192.168.1.1", "127.0.0.1", "169.254.10.10", "::1", "fe80::1", "fc00::1"]) {
+            expect(publicIp(value)).toBe("");
+        }
+    });
+
+    it("drops malformed input", () => {
+        for (const value of [undefined, "", "not-an-ip", "1.2.3", "1.2.3.999", "1.2.3.4.5"]) {
+            expect(publicIp(value)).toBe("");
+        }
     });
 });
