@@ -120,6 +120,7 @@ export class PaymentsService implements OnModuleInit {
             payUrl: checkout.payUrl,
             qrcode: checkout.qrcode ?? "",
             img: checkout.img ?? "",
+            urlscheme: checkout.urlscheme ?? "",
         };
     }
 
@@ -185,7 +186,14 @@ export class PaymentsService implements OnModuleInit {
             cid: extraCid(channel.extra),
             device: /mobile|android|iphone|ipad/i.test(params.userAgent) ? "mobile" : "pc",
         });
-        return { channelId: channel.id, driver: channel.driver, payUrl: checkout.payUrl, qrcode: checkout.qrcode ?? "", img: checkout.img ?? "" };
+        return {
+            channelId: channel.id,
+            driver: channel.driver,
+            payUrl: checkout.payUrl,
+            qrcode: checkout.qrcode ?? "",
+            img: checkout.img ?? "",
+            urlscheme: checkout.urlscheme ?? "",
+        };
     }
 
     /** Validates a gateway notification against the channel that issued the order. */

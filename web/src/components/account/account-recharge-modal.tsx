@@ -154,29 +154,9 @@ function OnlineRechargeForm({ active, onSuccess }: { active: boolean; onSuccess:
         // 这种必须由前端自己画成二维码才能扫，直接塞进 img src 会是一张破图。
         const qrImage = checkout.img || (checkout.qrcode.startsWith("http") && /\.(png|jpg|jpeg|gif|webp)(\?|$)/i.test(checkout.qrcode) ? checkout.qrcode : "");
         const qrValue = qrImage ? "" : checkout.qrcode.trim();
-        // 这类收款码是静态的，金额要在支付宝里手动输入，上游应付金额还可能带小数位（下单 0.02 要付 0.03），
-        // 所以金额放大显示 + 一键复制，避免手输错导致对不上账。
-        const copyAmount = async () => {
-            const text = formatMoney(checkout.amount);
-            try {
-                if (navigator.clipboard?.writeText) {
-                    await navigator.clipboard.writeText(text);
-                } else {
-                    // 非安全上下文（内网 http 预览、老浏览器）没有 clipboard API，退回旧办法。
-                    const holder = document.createElement("textarea");
-                    holder.value = text;
-                    holder.style.position = "fixed";
-                    holder.style.opacity = "0";
-                    document.body.append(holder);
-                    holder.select();
-                    document.execCommand("copy");
-                    holder.remove();
-                }
-                message.success(t("account.amountCopied"));
-            } catch {
-                message.warning(t("account.copyFailed"));
-            }
-        };
+        // 网关自己给了唤起链接（如景诺支付给的 alipays://platformapi/startapp?appId=20000067&url=<支付页>）就用它，
+        // 否则按收款码内容拼一个（云启那种静态收款码）。
+        const alipayLink = (checkout.urlscheme || "").trim() || (qrValue ? alipayScheme(qrValue) : "");
         return (
             <div className="flex flex-col items-center gap-3 py-2 text-center">
                 <p className="text-sm font-medium">{t("account.waitingPayment")}</p>
@@ -191,14 +171,10 @@ function OnlineRechargeForm({ active, onSuccess }: { active: boolean; onSuccess:
                         <div className="flex items-center gap-2 rounded-md border border-stone-200 px-3 py-2 dark:border-stone-700">
                             <span className="text-xs text-stone-500">{t("account.amountToPay")}</span>
                             <span className="text-lg font-semibold tabular-nums">{formatMoney(checkout.amount)}</span>
-                            <Button size="small" onClick={copyAmount}>
-                                {t("account.copyAmount")}
-                            </Button>
                         </div>
-                        <p className="text-xs text-stone-500">{t("account.enterAmountHint")}</p>
                         <p className="text-xs text-stone-500">{t("account.payAmountHint", { paid: formatMoney(checkout.amount), credit: formatMoney(checkout.creditAmount) })}</p>
-                        {qrValue ? (
-                            <Button type="link" size="small" href={alipayScheme(qrValue)}>
+                        {alipayLink && checkout.method === "alipay" ? (
+                            <Button type="link" size="small" href={alipayLink}>
                                 {t("account.openInAlipay")}
                             </Button>
                         ) : null}

@@ -82,6 +82,8 @@ export type RechargeCheckout = {
     payUrl: string;
     qrcode: string;
     img: string;
+    /** 网关给的原生唤起链接（支付宝客户端 scheme），有则优先用它唤起 App。 */
+    urlscheme: string;
 };
 
 export type RechargeOrderStatus = {
