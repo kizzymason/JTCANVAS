@@ -34,6 +34,8 @@ export type GatewayCheckoutResult = {
     qrcode?: string;
     img?: string;
     tradeNo?: string;
+    /** 网关给的原生唤起链接（支付宝客户端 scheme 等），有则前端优先用它唤起 App。 */
+    urlscheme?: string;
     /**
      * 网关实际收款金额。码支付类渠道（金额后加小数位区分并发到账）会与请求金额不同，
      * 此时订单金额必须对齐它，否则回调/查单的金额校验会对不上。
