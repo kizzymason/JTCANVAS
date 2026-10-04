@@ -1492,7 +1492,7 @@ export default {
                 authHeader: "Authentication",
                 step1: "Put the secret in your backend configuration (environment variable, never committed).",
                 step2: "When the buyer clicks pay, your backend calls POST /checkouts with your own order id as `reference`.",
-                step3: "Render the returned qrcode / img on your own page, or send the buyer to payUrl.",
+                step3: "Render the returned img (a ready-to-display payment QR image) on your own page; when img is empty, render qrcode with your own QR library or send the buyer to payUrl.",
                 step4: "Your front end polls your backend, which polls GET /checkouts/{orderNo}.",
                 step5: "Once status is paid, show the codes to the buyer and you are done.",
                 privacy: "Domains and buyer data",

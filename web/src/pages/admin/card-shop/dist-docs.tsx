@@ -35,6 +35,8 @@ curl -X POST ${base}/checkouts \\
 # => { "orderNo": "C2026...", "accessToken": "…", "amount": "9.900000",
 #      "commission": "1.485000",
 #      "payUrl": "https://<收银台>/…", "qrcode": "…", "img": "…" }`,
+//      img 是可以直接显示的付款二维码图片（data URL，放进 <img src> 即可）；
+//      qrcode 是二维码**内容**（可能是本单的支付页链接），要自己渲染二维码时用它。
         poll: `curl ${base}/checkouts/C2026xxxxxxxx \\
   -H "Authorization: Bearer $JT_CHANNEL_SECRET"
 
@@ -75,7 +77,8 @@ export async function startCheckout(orderId, productId, quantity, email) {
                 returnUrl: "https://shop.example.com/pay/result" },
     });
     // 把 orderNo 存进你自己的订单表，后面靠它查状态
-    return { orderNo: checkout.orderNo, qrcode: checkout.qrcode, payUrl: checkout.payUrl };
+    // img 是我们替你渲染好的二维码图片（data URL），直接给前端显示；qrcode 是二维码内容。
+    return { orderNo: checkout.orderNo, qrcode: checkout.qrcode, img: checkout.img, payUrl: checkout.payUrl };
 }
 
 // 2) 你的前端轮询你自己的这个接口，它再来问我们
@@ -178,10 +181,14 @@ function verify(rawBody, header, secret) {
     const data = await res.json();
     if (!data.orderNo) return out("下单失败，请稍后再试");
 
-    // 二维码直接渲染在你的页面上，买家不需要跳出去
-    out(data.qrcode
-      ? \`<p>请扫码支付</p><img alt="付款二维码" src="\${data.img || data.qrcode}" />\`
-      : \`<p><a href="\${data.payUrl}" target="_blank" rel="noopener">点此支付</a></p>\`);
+    // 付款二维码直接显示在你的页面上，买家不需要跳出去：
+    //   img 为空 → qrcode 是二维码内容（可能是本单支付页链接），用你自己的二维码库渲染它
+    //   img 与 qrcode 都为空 → 退回 payUrl 打开收银台
+    out(data.img
+      ? \`<p>请扫码支付</p><img alt="付款二维码" src="\${data.img}" />\`
+      : data.qrcode
+        ? \`<p>请扫码支付</p><div id="qr"></div><script>/* 用二维码库把 data.qrcode 渲染进 #qr */</script>\`
+        : \`<p><a href="\${data.payUrl}" target="_blank" rel="noopener">点此支付</a></p>\`);
 
     // 轮询你自己的后端，它再问我们要状态
     clearInterval(timer);
