@@ -1471,7 +1471,7 @@ export default {
                 authHeader: "鉴权方式",
                 step1: "在自己的后端配置密钥（环境变量，不要提交到代码库）。",
                 step2: "买家点击支付时，你的后端调 POST /checkouts，reference 传你自己的订单号。",
-                step3: "把返回的 qrcode / img 渲染在你自己的页面上，或跳转 payUrl。",
+                step3: "把返回的 img（可直接放进 <img> 的付款二维码图片）渲染在你自己的页面上；img 为空时用 qrcode 自己渲染二维码，或跳转 payUrl。",
                 step4: "前端轮询你自己的后端，你的后端再调 GET /checkouts/{orderNo} 查状态。",
                 step5: "status 变成 paid 后，把 codes 里的卡密展示给买家，一单结束。",
                 privacy: "关于域名与买家信息",

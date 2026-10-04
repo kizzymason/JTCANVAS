@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- [修复] 下游渠道的卡密售卖页面不再是一张裂图：外部渠道下单接口（`/api/card-dist/v1/checkouts`，前台 `/cards` 同样）返回的 `img` 现在是**可直接显示的付款二维码图片**。原因是网关给的 `qrcode` 是二维码**内容**（景诺支付 / chpay.cc 给的是本单 `…/pay/submitwap/<trade_no>/` 支付页链接），而对接文档让接入方用 `<img src="${img || qrcode}">` 显示，链接被当图片加载就裂了。现在网关没给图片时由服务端渲染一张（GIF data URL，约 1.8KB），`qrcode` 字段仍原样返回，供自行渲染二维码的接入方使用；已带图片的渠道原样沿用，内容为空或编码失败时返回空串、绝不影响下单。
+- [新增] 新增依赖 `qrcode-generator`（零依赖、MIT）与 `server/src/modules/payments/qr-image.ts`（`qrImageDataUrl` / `isQrImage` / `qrImageFor`），配套 9 项单测：链接渲染成 GIF data URL（校验 GIF 文件头）、空内容/纯空白返回空串、渲染结果稳定、图片地址识别（data URL 与带后缀地址）、`img` 取值优先级（已有图片原样沿用、只给内容时补图、`qrcode` 本身是图片时不补、两边都空返回空串）。
+- [调整] 后台「卡密售卖 → 对接文档」讲清 `img` 与 `qrcode` 的区别（`img` 可直接放进 `<img>`，`qrcode` 是内容、需要用二维码库渲染），示例代码与中英文文案同步更新。
 - [修复] 支付宝渠道（景诺支付 / chpay.cc）的付款二维码现在能正常出现在充值弹窗上：该网关 `mapi.php` 只返回「收银台地址」，不返回 `qrcode`，二维码内容其实在网关自己的扫码页里（`<网关>/pay/qrcode/<trade_no>/` 的 `var code_url`，扫开就是本单的 `alipay.trade.wap.pay` 支付页）。易支付适配器在响应缺 `qrcode` 时按订单号把它取回来，交给前台自己画成二维码，付款全程留在本站弹窗内；取不到时不影响下单，退回「打开支付页面」。同时取回网关给的 `url_scheme`（`alipays://platformapi/startapp?appId=20000067&url=…`），手机端点一下直接唤起支付宝。
 - [调整] 充值弹窗不再显示「复制金额」按钮与「请在支付宝里输入金额」提示：这个渠道按单出码、金额已经在码里，扫码即付，前台只显示应付金额与到账金额（相关多语言键一并移除）。
 - [新增] 下单响应新增 `urlscheme`（钱包充值与外部/卡店下单都返回）；新增 `server/src/modules/payments/epay.adapter.spec.ts`：扫码页地址拼接（网关尾斜杠、订单号 URL 编码）、二维码内容与唤起链接解析（含网关把地址拼在 scheme 后面的 `encodeURIComponent(code_url)`、`data:image` 图片码、页面无相关变量）、响应无 `qrcode` 时自动补码、已带 `qrcode` 时不重复请求网关、抓取失败不影响下单、`mapi.php` 不可用退回 `submit.php` 页面支付。

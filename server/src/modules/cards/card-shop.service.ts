@@ -9,6 +9,7 @@ import { formatMoney, money, mulMoney, toMoneyString } from "../../common/money"
 import type { Paginated } from "../../common/types";
 import { isPaymentMethod, type PaymentMethod } from "../payments/payment-gateway";
 import { PaymentsService } from "../payments/payments.service";
+import { qrImageFor } from "../payments/qr-image";
 import { MerchantCommissionService } from "./merchant-commission.service";
 import { MerchantWebhookService } from "./merchant-webhook.service";
 import { commissionPayableAt } from "./merchant.rules";
@@ -113,7 +114,9 @@ export class CardShopService {
                 method,
                 payUrl: checkout.payUrl,
                 qrcode: checkout.qrcode,
-                img: checkout.img,
+                // 网关可能只给「二维码内容」（支付页链接）而不是图片，下游按文档用 <img src> 显示会是一张裂图，
+                // 这里替他们渲染成真图片（data URL）；只给了图片时原样沿用。
+                img: qrImageFor(checkout.qrcode, checkout.img),
             };
         } catch (error) {
             // A checkout that never opened is not a real order; drop it so the list stays meaningful.
@@ -201,7 +204,9 @@ export class CardShopService {
                 commission: commissionAmount,
                 payUrl: checkout.payUrl,
                 qrcode: checkout.qrcode,
-                img: checkout.img,
+                // 网关可能只给「二维码内容」（支付页链接）而不是图片，下游按文档用 <img src> 显示会是一张裂图，
+                // 这里替他们渲染成真图片（data URL）；只给了图片时原样沿用。
+                img: qrImageFor(checkout.qrcode, checkout.img),
             };
         } catch (error) {
             await this.db.delete(cardOrders).where(eq(cardOrders.id, order.id));
@@ -235,7 +240,7 @@ export class CardShopService {
                 channelId: channelIdOf(order) || undefined,
                 userAgent: "",
             });
-            return { ...base, payUrl: checkout.payUrl, qrcode: checkout.qrcode, img: checkout.img };
+            return { ...base, payUrl: checkout.payUrl, qrcode: checkout.qrcode, img: qrImageFor(checkout.qrcode, checkout.img) };
         } catch (error) {
             this.logger.warn(`checkout replay could not reopen payment: ${error instanceof Error ? error.message : "unknown"}`);
             return { ...base, payUrl: "", qrcode: "", img: "" };
