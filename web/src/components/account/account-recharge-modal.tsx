@@ -3,6 +3,7 @@ import { Ticket, Wallet } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { paymentMethodIcon } from "@/components/brand-icons";
 import { SegmentedSwitch } from "@/components/ui/segmented-switch";
 import { createRecharge, fetchRechargeCatalog, fetchRechargeOrder, redeemCard, type RechargeCatalog, type RechargeCheckout, type RechargePackageOption } from "@/services/api/account";
 import { ApiError, newIdempotencyKey } from "@/services/api/client";
@@ -250,7 +251,12 @@ function OnlineRechargeForm({ active, onSuccess }: { active: boolean; onSuccess:
 
             <div className="mb-4 flex gap-2">
                 {catalog.channels.map((item) => (
-                    <Button key={item.channelId} type={channelId === item.channelId ? "primary" : "default"} onClick={() => setChannelId(item.channelId)}>
+                    <Button
+                        key={item.channelId}
+                        type={channelId === item.channelId ? "primary" : "default"}
+                        icon={paymentMethodIcon(item.method)}
+                        onClick={() => setChannelId(item.channelId)}
+                    >
                         {item.label}
                     </Button>
                 ))}
