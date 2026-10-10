@@ -38,7 +38,7 @@ export function ModelPicker({ value, onChange, capability, className, fullWidth 
 
     useEffect(() => {
         if (capability === "image" && !current && models.some((model) => model.capability === "image")) {
-            applyDefaultImageModel();
+            void applyDefaultImageModel();
         }
     }, [capability, current, models]);
 

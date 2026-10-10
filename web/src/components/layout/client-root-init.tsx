@@ -43,7 +43,7 @@ export function ClientRootInit({ children }: { children: ReactNode }) {
         let cancelled = false;
         const run = () => {
             void loadModels().then(() => {
-                if (!cancelled) applyDefaultImageModel();
+                if (!cancelled) void applyDefaultImageModel();
             });
         };
         if (useConfigStore.persist.hasHydrated()) {
