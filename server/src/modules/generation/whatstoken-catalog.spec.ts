@@ -6,6 +6,7 @@ import {
     seedanceTokensFor,
     usdToSellCny,
     WHATSTOKEN_DURATION_VIDEO_MODELS,
+    WHATSTOKEN_ECONOMY_IMAGE_MODEL_NAMES,
     WHATSTOKEN_IMAGE_MODELS,
     WHATSTOKEN_TEXT_MODELS,
     WHATSTOKEN_VIDEO_MODELS,
@@ -14,6 +15,7 @@ import {
     whatsTokenDurationVideoRequiresRatio,
     whatsTokenDurationVideoResolution,
     whatsTokenImageFeatures,
+    whatsTokenImagePixelSpec,
     whatsTokenImagePriceRows,
     whatsTokenTextPriceRows,
     whatsTokenVideoFeatures,
@@ -48,6 +50,31 @@ describe("WhatsToken catalog prices", () => {
             { spec: "2K", unitPrice: "0.393120", extraReferencePrice: "0.000000", billingMode: "per_image" },
             { spec: "4K", unitPrice: "0.393120", extraReferencePrice: "0.000000", billingMode: "per_image" },
         ]);
+    });
+
+    it("seeds the special-price channels from discounted cost and prices the first reference free", () => {
+        // 2026-10 上游新开的字节系特价通道：目录里存折后实付价，售价 = 实付 × 7.2 × 1.3。
+        const proEco = WHATSTOKEN_IMAGE_MODELS.find((item) => item.name === "seedream-5-0-pro-NSFW-economy")!;
+        expect(whatsTokenImageFeatures(proEco).resolutions).toEqual(["1K", "2K"]);
+        expect(whatsTokenImagePriceRows(proEco)).toEqual([
+            { spec: null, unitPrice: "0.640224", extraReferencePrice: "0.021341", billingMode: "per_image" },
+            { spec: "1K", unitPrice: "0.320112", extraReferencePrice: "0.021341", billingMode: "per_image" },
+            { spec: "2K", unitPrice: "0.640224", extraReferencePrice: "0.021341", billingMode: "per_image" },
+        ]);
+        expect(whatsTokenImagePixelSpec("seedream-5-0-pro-NSFW-economy", "1600x1472")).toBe("1K");
+        expect(whatsTokenImagePixelSpec("seedream-5-0-pro-NSFW-economy", "1600x1488")).toBe("2K");
+        // 固定费率的三条通道，档位同价、无额外参考图费。
+        const flat = { "seedream-5-0-flash-NSFW": "0.219024", "seedream-5,0-lite-NSFW-economy": "0.248976", "seedream-4-5-NSFW-economy": "0.284544" };
+        for (const [name, price] of Object.entries(flat)) {
+            const model = WHATSTOKEN_IMAGE_MODELS.find((item) => item.name === name)!;
+            expect(model, name).toBeDefined();
+            expect(whatsTokenImagePriceRows(model).map((row) => row.unitPrice)).toEqual([price, price, price]);
+            expect(whatsTokenImagePriceRows(model)[0].extraReferencePrice).toBe("0.000000");
+        }
+        // 第二批名单里的每个名字都必须在目录里存在，否则重启时预置会静默漏掉。
+        for (const name of WHATSTOKEN_ECONOMY_IMAGE_MODEL_NAMES) {
+            expect(WHATSTOKEN_IMAGE_MODELS.some((model) => model.name === name), name).toBe(true);
+        }
     });
 
     it("converts Seedance token rates to CNY per second from encoder grids, not (res/1080)²", () => {

@@ -3,7 +3,8 @@ import { persist } from "zustand/middleware";
 
 import { DEFAULT_PIAPI_IMAGE_MODEL } from "@/lib/piapi/piapi-models";
 import { updatePreferences } from "@/services/api/account";
-import type { ModelCapability, PublicModel } from "@/services/api/models";
+import { fetchModels, type ModelCapability, type PublicModel } from "@/services/api/models";
+import { modelCatalogApi } from "@/services/api/model-catalog";
 import { useModelStore } from "@/stores/use-model-store";
 
 export type { ModelCapability } from "@/services/api/models";
@@ -200,11 +201,33 @@ export function resolveModelForCapability(config: AiConfig, preferred: string | 
 }
 
 /**
- * After the catalogue loads, keep a still-valid saved image model, otherwise pick PiAPI Seedream.
- * Must run after persist rehydration so a stored choice is not overwritten by the empty default.
- * The smoke-image fixture is ignored so it cannot steal the default after PiAPI is restored.
+ * 后台「推荐模型」分组里排在最前面的图片模型。经济版通道效果与官方一致、价格更低，
+ * 运营把它们放进推荐组即可让工作台默认选中，不需要改代码。
+ * 目录接口不可用时返回空串，调用处照旧走 PiAPI / 第一个可用模型兜底。
  */
-export function applyDefaultImageModel() {
+async function recommendedImageModelValue(models: PublicModel[]) {
+    try {
+        const catalog = await modelCatalogApi.get();
+        const featured = catalog.groups.find((group) => group.key === "featured");
+        if (!featured) return "";
+        const ranked = catalog.models.filter((entry) => entry.groupId === featured.id).sort((a, b) => a.sortOrder - b.sortOrder);
+        for (const entry of ranked) {
+            const model = models.find((item) => item.value === entry.modelValue);
+            if (model && !isSmokeTestModel(model)) return model.value;
+        }
+    } catch {
+        // 目录加载失败不影响默认模型可用性。
+    }
+    return "";
+}
+
+/**
+ * After the catalogue loads, keep a still-valid saved image model, otherwise pick the recommended
+ * (featured) model, then PiAPI Seedream. Must run after persist rehydration so a stored choice is
+ * not overwritten by the empty default. The smoke-image fixture is ignored so it cannot steal the
+ * default after PiAPI is restored.
+ */
+export async function applyDefaultImageModel() {
     const models = useModelStore.getState().models.filter((item) => item.capability === "image");
     if (!models.length) return;
 
@@ -216,7 +239,9 @@ export function applyDefaultImageModel() {
         return;
     }
 
+    const recommended = await recommendedImageModelValue(models);
     const preferred =
+        models.find((item) => item.value === recommended) ??
         models.find((item) => item.apiFormat === "piapi" && item.modelName === DEFAULT_PIAPI_IMAGE_MODEL) ??
         models.find((item) => item.apiFormat === "piapi") ??
         models.find((item) => !isSmokeTestModel(item)) ??

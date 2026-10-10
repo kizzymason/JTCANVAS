@@ -153,6 +153,17 @@ export const WHATSTOKEN_IMAGE_MODELS: WhatsTokenImageModel[] = [
         defaultSize: "2K",
     },
     /*
+     * 上游「特价通道」系列（2026-10 上线）。列表价 × 折扣后的实付价写进目录，重定价才不会算高：
+     * pro 系列 ≤236 万像素 $0.045×0.76=$0.0342，≤10000 万像素 $0.09×0.76=$0.0684；首张免费，
+     * 超出的参考图 $0.003×0.76=$0.00228。上游 pro 系列只接受 1K/2K，故不提供 4K 档。
+     */
+    { name: "seedream-5-0-pro-NSFW-economy", displayName: "Seedream 5.0 Pro 特价", sizes: { "1K": "0.0342", "2K": "0.0684" }, extraReferenceUsd: "0.00228", defaultSize: "2K" },
+    // 纯 BytePlus 官方 Flash，固定费率、上游无折扣。
+    { name: "seedream-5-0-flash-NSFW", displayName: "Seedream 5.0 Flash", sizes: { "2K": "0.0234", "4K": "0.0234" }, extraReferenceUsd: "0", defaultSize: "2K" },
+    { name: "seedream-4-5-NSFW-economy", displayName: "Seedream 4.5 特价", sizes: { "2K": "0.0304", "4K": "0.0304" }, extraReferenceUsd: "0", defaultSize: "2K" },
+    // 注意：上游模型 id 里是真的带逗号（seedream-5,0-…），照抄，不要写成点。
+    { name: "seedream-5,0-lite-NSFW-economy", displayName: "Seedream 5.0 Lite 特价", sizes: { "2K": "0.0266", "4K": "0.0266" }, extraReferenceUsd: "0", defaultSize: "2K" },
+    /*
      * GPT Image 2 bills output image tokens at $32.4/1M. Measured against the upstream at 1024×1024:
      * low = 196, medium = 1756, high = 7024 output tokens, which is exactly the low/medium/high
      * quality axis our 1K/2K/4K tiers already map onto. The USD figures below are those token counts
@@ -543,8 +554,16 @@ export const WHATSTOKEN_ADDED_MODEL_NAMES = new Set([
     "dola-seedream-5-0-pro", "seedream-5-0-pro", "seedream-5-0-spg", "seedream-5.0-lite",
 ]);
 
+/**
+ * 第二批预置：2026-10 上游新开的字节系图片通道（特价/Flash）。与第一批分开维护，
+ * 靠 channels.catalogue_revision 的门控（<2 时写入一次），已经改过价/删过模型的渠道重启后不会被覆盖。
+ */
+export const WHATSTOKEN_ECONOMY_IMAGE_MODEL_NAMES = new Set([
+    "seedream-5-0-pro-NSFW-economy", "seedream-5-0-flash-NSFW", "seedream-4-5-NSFW-economy", "seedream-5,0-lite-NSFW-economy",
+]);
+
 export function whatsTokenImagePixelSpec(modelName: string, size: string | undefined) {
-    if (!["dola-seedream-5-0-pro", "seedream-5-0-pro"].includes(modelName)) return undefined;
+    if (!["dola-seedream-5-0-pro", "seedream-5-0-pro", "seedream-5-0-pro-NSFW-economy"].includes(modelName)) return undefined;
     const dimensions = /^(\d+)x(\d+)$/i.exec(size ?? "");
     if (!dimensions) return undefined;
     return Number(dimensions[1]) * Number(dimensions[2]) <= 2_360_000 ? "1K" : "2K";
